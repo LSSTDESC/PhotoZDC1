@@ -76,12 +76,3 @@ If using python < 2.7.6 and/or scipy < 0.14 you may get a lot of printing of:
 from `scipy.integrate.quad`
 
 
-
-
-
-
-
-
-
-
-
