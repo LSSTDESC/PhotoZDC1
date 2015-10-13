@@ -14,19 +14,47 @@
 
   ObsMag: inherits from CalcMag, adds the photometric error calculations
 
+  Cython does the integration using GSL
 
 """
 
+from cGslInteg cimport *
+from libc.math cimport log10
 import scipy.integrate as integ
 import math
 import time
 
-class PhotCalcs(object):
+
+### Note: had to move integrand functions outside of PhotCalcs class
+### It is too hard to supply them to GSL's gsl_function due to the 
+### class instance argument that comes with them as a class method
+
+cdef double integrand1(double lam, void * params):
+    """Return Sed(lam/(1+z))*Filt(lam)*lam"""
+    params_as_object = <object>params
+    sed, filt, redshift = params_as_object
+    cdef double z = redshift
+    return sed.getFlux(lam, z)*filt.getTrans(lam)*lam
+
+
+cdef double integrand2(double lam, void * params):
+    """Return Filt(lam)/lam"""
+    params_as_object = <object>params
+    filt = params_as_object[0]
+    return filt.getTrans(lam)/lam
+
+    
+
+cdef class PhotCalcs: #(object):
     """Base photometric calculations
     
     """
-
-    def __init__(self, sed, filterDict):
+    # AA: made the following definition because it works, might not be best?
+    cdef object sed
+    cdef object filterDict
+    
+    # * and ** arguments so that it can accept and ignore extra arguments
+    def __cinit__(self, *args): #object sed, object filterDict, ):
         """Initialise photometry calculation
         
            @param sed           SED object (spectral energy distribution)
@@ -34,8 +62,8 @@ class PhotCalcs(object):
                                 value=Filter object
         
         """
-        self.sed = sed
-        self.filterDict = filterDict
+        self.sed = args[0] #sed
+        self.filterDict = args[1] # filterDict
         
     
     def __str__(self):
@@ -72,6 +100,7 @@ class PhotCalcs(object):
            @warning if the SED has zero flux within the obs-frame filter INFINITY will be returned
         """
         
+
         if filtX not in self.filterDict:
             emsg = "Filter " + filtX + " is not in the filter dictionary"
             raise LookupError(emsg)
@@ -79,41 +108,88 @@ class PhotCalcs(object):
             emsg = "Filter " + filtY + " is not in the filter dictionary"
             raise LookupError(emsg)
             
+        # unittest can't see z<1 error thrown by sedFilter.SED.getFlux()
+        # probably can fix this? but for now put extra check here
+        if (z<0.):
+            raise ValueError("ERROR! redshift cannot be less than zero")
     
         # define integral limits by filter extents
+        cdef double aX, bX, aY, bY
         aX, bX = self.filterDict[filtX].returnFilterRange()
         aY, bY = self.filterDict[filtY].returnFilterRange()
         #print 'Integrating filter X between', aX ,'and', bX
         #print 'Integrating filter Y between', aY ,'and', bY
+        
+        
+        # these will be the integration results and their errors
+        cdef double int1, int2, int3, int4
+        cdef double eint1, eint2, eint3, eint4
     
-        #start_time = time.time()
-        # integral of SED over observed-frame filter
-        # int S(lam/(1+z))*X(lam)*lam dlam
-        int1 = integ.quad(self._integrand1, aX, bX, args=(z, filtX))[0]
-        # integral of SED over rest-frame filter
-        # int S(lam)*Y(lam)*lam dlam
-        int3 = integ.quad(self._integrand1, aY, bY, args=(0., filtY))[0]
+        # set up the memory for the gsl integration workspace
+        cdef gsl_integration_workspace * W
+        W = gsl_integration_workspace_alloc(1000)
+        
+        # Integration precision
+        cdef double epsabs = 0.
+        cdef double epsrel = 1e-2
+        
+        # GSL function to use for integration
+        cdef gsl_function F
+        
+        # parameters will be stored in pointer p, in a tuple of type object
+        cdef object o 
+        cdef void* p
+
+        ## Integrand 1: integral of SED over observed-frame filter
+        # set parameters, a tuple containing the SED, filter and redshift    
+        o = (self.sed, self.filterDict[filtX], z)
+        p = <void*>o
+        F.function = &integrand1
+        F.params = p
+        
+        # do integration
+        gsl_integration_qags(&F, aX, bX, epsabs, epsrel, 1000, W, &int1, &eint1)
         
         
-        # don't perform these integrals if filter is the same
+        ## Integrand 3: integral of SED over rest-frame filter
+        # set parameters, a tuple containing the SED, filter and redshift = 0
+        o = (self.sed, self.filterDict[filtY], 0.)
+        p = <void*>o
+        F.function = &integrand1
+        F.params = p
+        
+        # do integration
+        gsl_integration_qags(&F, aY, bY, epsabs, epsrel, 1000, W, &int3, &eint3)
+        
         if (filtX != filtY):
-            # integral of rest-frame filter
-            # int Y(lam)/lam dlam
-            int2 = integ.quad(self._integrand2, aY, bY, args=(filtY))[0]
         
-            # integral of observed-frame filter
-            # int X(lam)/lam dlam
-            int4 = integ.quad(self._integrand2, aX, bX, args=(filtX))[0]
-            
-            # check integrals of filters: these should *definitely* never be zero
-            if (int2==0. or int4==0.):
-                raise ValueError("ERROR: one or more filters integrate to zero")
-                
+            ## Integrand 2: integral of rest-frame filter
+            # set parameters, a tuple containing just the filter
+            o = (self.filterDict[filtY], )
+            p = <void*>o
+            F.function = &integrand2
+            F.params = p
+        
+            # do integration
+            gsl_integration_qags(&F, aY, bY, epsabs, epsrel, 1000, W, &int2, &eint2)
+        
+        
+            ## Integrand 4: integral of observed-frame filter
+            # set parameters, a tuple containing just the filter
+            o = (self.filterDict[filtX], )
+            p = <void*>o
+            F.function = &integrand2
+            F.params = p
+        
+            # do integration
+            gsl_integration_qags(&F, aX, bX, epsabs, epsrel, 1000, W, &int4, &eint4)
+        
         else:
             int2 = 1.
             int4 = 1.
         #end_time = time.time()
         #print "time to int1,int2,int3,int4 =", end_time - start_time
+
         
         # if there is zero flux within the observed-frame filter (e.g. SED completely redshifted out)
         if (int1==0.):
@@ -126,9 +202,13 @@ class PhotCalcs(object):
             # not sure of the meaning of this, but it seems possible?
             raise ValueError("ERROR: ?? no flux within rest-frame filter??")
         
-        return -2.5*math.log10( 1./(1.+z) * (int1*int2)/(int3*int4) )
+        # free the integration workspace
+        gsl_integration_workspace_free(W)
+        
+        return -2.5*log10( 1./(1.+z) * (int1*int2)/(int3*int4) )
     
        
+    ## @todo WRITE COMPUTE COLOR
     def computeColor(self, filtX, filtY, z):
         """Compute color (flux in filter X - filter Y) of SED at redshift z, return color in magnitudes
         
@@ -150,15 +230,70 @@ class PhotCalcs(object):
         aX, bX = self.filterDict[filtX].returnFilterRange()
         aY, bY = self.filterDict[filtY].returnFilterRange()
         
-        int1 = integ.quad(self._integrand1, aX, bX, args=(z, filtX))[0]
-        int2 = integ.quad(self._integrand1, aY, bY, args=(z, filtY))[0]
+        # these will be the integration results and their errors
+        cdef double int1, int2, int3, int4
+        cdef double eint1, eint2, eint3, eint4
+    
+        # set up the memory for the gsl integration workspace
+        cdef gsl_integration_workspace * W
+        W = gsl_integration_workspace_alloc(1000)
         
-        # Do we need this zero-point term?
-        int3 = integ.quad(self._integrand2, aX, bX, args=(filtX))[0]
-        int4 = integ.quad(self._integrand2, aY, bY, args=(filtY))[0]
+        # Integration precision
+        cdef double epsabs = 0.
+        cdef double epsrel = 1e-5
+        
+        # GSL function to use for integration
+        cdef gsl_function F
+        
+        # parameters will be stored in pointer p, in a tuple of type object
+        cdef object o 
+        cdef void* p
+
+        ## Integrand 1: integral of SED over filter X
+        # set parameters, a tuple containing the SED, filter and redshift    
+        o = (self.sed, self.filterDict[filtX], z)
+        p = <void*>o
+        F.function = &integrand1
+        F.params = p
+        
+        # do integration
+        gsl_integration_qags(&F, aX, bX, epsabs, epsrel, 1000, W, &int1, &eint1)
+        
+        
+        ## Integrand 2: integral of SED over filter Y
+        # set parameters, a tuple containing the SED, filter and redshift = 0
+        o = (self.sed, self.filterDict[filtY], z)
+        p = <void*>o
+        F.function = &integrand1
+        F.params = p
+        
+        # do integration
+        gsl_integration_qags(&F, aY, bY, epsabs, epsrel, 1000, W, &int2, &eint2)
+        
+
+        ## Integrand 3: integral of filter X
+        # set parameters, a tuple containing just the filter
+        o = (self.filterDict[filtX], )
+        p = <void*>o
+        F.function = &integrand2
+        F.params = p
+        
+        # do integration
+        gsl_integration_qags(&F, aX, bX, epsabs, epsrel, 1000, W, &int3, &eint3)
+        
+        
+        ## Integrand 4: integral of filter Y
+        # set parameters, a tuple containing just the filter
+        o = (self.filterDict[filtY], )
+        p = <void*>o
+        F.function = &integrand2
+        F.params = p
+        
+        # do integration
+        gsl_integration_qags(&F, aY, bY, epsabs, epsrel, 1000, W, &int4, &eint4)
         zp = -2.5*math.log10(int4/int3)
         
-        return -2.5*math.log10(int1/int2) + zp
+        return -2.5*log10(int1/int2) + zp
     
     
     ## I'M UNSURE IF I SHOULD 'UNCALIBRATE' THE FLUX BEFORE CONVERSION??      ##
@@ -201,25 +336,9 @@ class PhotCalcs(object):
         dFluxOverFlux = errorMag*(0.4*math.log(10.))
         return dFluxOverFlux
     
+
     
-    def _integrand1(self, lam, z, filtname):
-        """Return Sed(lam/(1+z))*Filt(lam)*lam"""
-        #if (z>2.1):
-        #    print lam, lam/(1.+z), self.sed.getFlux(lam, z)
-        return self.sed.getFlux(lam, z)*self.filterDict[filtname].getTrans(lam)*lam
-    
-    
-    def _integrand2(self, lam, filtname):
-        """Return Filt(lam)/lam"""
-        return self.filterDict[filtname].getTrans(lam)/lam
-        
-        
-    #def _integrand3(self, lam, filtname):
-    #    """Return fAB(lam)*Filt(lam)*lam: NOT CURRENTLY USED"""
-    #    fAB = 3.631e-20 # AB standard source in ergs/s/cm^2/Hz units
-    #    return fAB*self.filterDict[filtname].getTrans(lam)*lam
-    
-    
+
     
 class CalcMag(PhotCalcs):
     """Calculate magnitudes for the given SED at redshift z, with absolute magnitude absMag in all of the
@@ -230,10 +349,13 @@ class CalcMag(PhotCalcs):
                             value=Filter object
        @param cosmoModel    cosmology calculator
     """
+    
+    #cdef object cosmoModel
 
     def __init__(self, sed, filterDict, cosmoModel):
     
-        PhotCalcs.__init__(self, sed, filterDict)
+        #PhotCalcs.__cinit__(self, sed, filterDict)
+        #super(PhotCalcs, self).__init__()
         self.cosmoModel = cosmoModel
 
 
