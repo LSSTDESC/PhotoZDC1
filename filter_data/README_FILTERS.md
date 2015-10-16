@@ -12,3 +12,33 @@ The `*.filter` files are the list of all filters belonging to a particular filte
 to read in the desired set of filters.
 
 The LSST filter transmissions were obtained from the [LSST github repo](https://github.com/lsst/throughputs)
+
+The Johnson filter transmissions are from BPZ
+
+Other filter transmissions are from the Theoretical Astrophysical Observatory (TAO)
+https://tao.asvo.org.au/tao/
+
+UKIRT_Y_filter.dati
+UKIRT_K_filter.dati
+UKIRT_J_filter.dati
+UKIRT_H_filter.dati
+TOPHAT_UV2800top.dati
+TOPHAT_UV2300top.dati
+TOPHAT_UV1500top.dati
+SDSS_sdss_z.dati
+SDSS_sdss_u.dati
+SDSS_sdss_r.dati
+SDSS_sdss_i.dati
+SDSS_sdss_g.dati
+PACS_pacs70.dati
+PACS_pacs160.dati
+PACS_pacs100.dati
+IRAC_irac_ch4.dati
+IRAC_irac_ch3.dati
+IRAC_irac_ch2.dati
+IRAC_irac_ch1.dati
+GALEX_galex_NUV.dati
+GALEX_galex_FUV.dati
+2MASS_Ksband_2mass.dati
+2MASS_Jband_2mass.dati
+2MASS_Hband_2mass.dati
