@@ -1,13 +1,15 @@
 """Classes and functions that manipulate the SEDs and the filters
 
   Classes:
-  SED: holds flux vs wavelength data
-  Filter: holds transmission vs wavelength data
+  SED:          holds flux vs wavelength data
+  Filter:       holds transmission vs wavelength data
   EmissionLine: holds emission line model (TO BE IMPLEMENTED)
   
   Helper functions:
-  createFilterDict: Reads list of filters from a file, then writes their data into a dictionary
-  getFilterList: Reads list of filters from a file and returns the name of each filter as a list
+  createSedDict:    Reads list of SEDs from a file, then write their data into a dictionary (of SED objects)
+  createFilterDict: Reads list of filters from a file, then writes their data into a dictionary 
+                    (of Filter objects)
+  getFilterList:    Reads list of filters from a file and returns the name of each filter as a list
   
   
 
@@ -261,6 +263,29 @@ class EmissionLine(object):
 
         
 #### Helper functions ####
+
+def createSedDict(listOfSedsFile, pathToFile):
+    """Read file containing list of SEDs to read, then read these SEDs into a dictionary
+    
+       Dictionary keyword is a string: name of the file that contained the filter (without path or extension)
+       Dictionary value is a Filter object: the filter transmission data read from file 
+       
+    """
+    
+    f = open(pathToFile + "/" + listOfSedsFile)
+        
+    sedDict = {}
+    for line in f:
+           
+        sedData = np.loadtxt(pathToFile + "/" + line.rstrip())
+        sedName = line.rstrip().split('.')[0]
+        print "Adding filter", sedName ,"to dictionary"
+        
+        sed = SED(sedData[:,0], sedData[:,1])
+        sedDict[sedName] = sed
+           
+    return sedDict
+    
 
 def createFilterDict(listOfFiltersFile, pathToFile):
     """Read file containing list of filters to read, then read these filters into a dictionary
