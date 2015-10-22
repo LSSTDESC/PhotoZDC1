@@ -75,4 +75,4 @@ If using python < 2.7.6 and/or scipy < 0.14 you may get a lot of printing of:
 `IntegrationWarning: The maximum number of subdivisions (50) has been achieved.'
 from `scipy.integrate.quad`
 
-
+The integration method is under development because `scipy.quad` is too slow.
