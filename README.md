@@ -51,7 +51,7 @@ see `igmModel.py`
 
 ### Code installation
 
-1. python 2.X distribution with all the usual (numpy, scipy, matplotlib, etc). [Anaconda](https://store.continuum.io/cshop/anaconda/) is a good choice.
+1. python 2.X distribution with all the usual (numpy, scipy, matplotlib, etc) and the following packages: cython (optional), scikit-learn, pandas, astropy. [Anaconda](https://store.continuum.io/cshop/anaconda/) is a good choice.
 2. clone repository to local directory
 3. add `src/` directory to `PYTHONPATH` environment variable
 4. try running some examples!
