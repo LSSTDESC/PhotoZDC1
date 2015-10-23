@@ -9,7 +9,7 @@ import photometry as phot
 import matplotlib.pyplot as plt
 
 
-# filter set of choice is the Johnson filters: these may differ from exact ones used in de Lapparent
+# filter set of choice
 listOfFilters = 'LSST.filters'
 pathToFilters = '../filter_data'
 
