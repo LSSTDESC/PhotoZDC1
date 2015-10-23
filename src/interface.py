@@ -14,6 +14,7 @@ import operator
 ops = {"==": operator.eq, "!=": operator.ne, ">": operator.gt, ">=": operator.ge, "<": operator.lt,
        "<=": operator.le}
 
+
 class ReadCosmoSim(object):
     """Read cosmological simulation from a FITS or text file
     
@@ -48,7 +49,7 @@ class ReadCosmoSim(object):
         """
         
         table = Table.read(file_to_read)
-        data = table._data # will be deprecated but Table.as_array doesn't work.
+        data = table._data # will be deprecated but Table.as_array doesn't work????
         # Fix byte order.
         # See https://github.com/astropy/astropy/issues/1156
         data = data.byteswap().newbyteorder()
@@ -73,11 +74,9 @@ class ReadCosmoSim(object):
            @param index          column to use as row index (False=none)
         """
         self._data = pd.read_csv(file_to_read, delimiter=delimiter, index_col=index) 
-        #np.genfromtxt(file_to_read, dtype='float', names=True)
+        #np.genfromtxt(file_to_read, dtype='float', names=True) # this is WAY slower
         self._col_names = self._data.columns
 
-
-        
         
     def get_number_of_cols(self):
         """Return number of columns in file
@@ -89,6 +88,11 @@ class ReadCosmoSim(object):
         """Return number of entries in file
         """
         return len(self._data)
+        
+    def get_dimensions(self):
+        """Return the size of each dimension in the file
+        """
+        return self._data.shape
         
     
     def get_column_names(self):
@@ -118,7 +122,8 @@ class ReadCosmoSim(object):
     # args: cols_to_select, conditions (tuple of: (col, cond, val) e.g. (colname, '>', 10)
     #    df[ (df.a > 100) & (df.b == "test") ]
     def select_given_all_true(self, conditions, cols_to_select='all'):
-        """Select all the listed columns and return all entries where all the conditions are true
+        """Select all the listed columns and return all entries where all the conditions are true. Returns
+           dataframe
         
            @param conditions       list of tuples describing conditions upon each column
                                    (colname/index, 'operator', value)
@@ -173,6 +178,65 @@ class ReadCosmoSim(object):
         self._check_column_valid(column2)
         
         return self._data.groupby(pd.cut(self._data[column1]-self._data[column2], bins=bins))
+        
+        
+    def get_random_subsample(self, nsample, cols_to_select='all'):
+        """Return a random sub-sample of the catalog of size nsample. Returns dataframe
+        
+           @param nsample           number of entries of catalog to select [int]
+           @param cols_to_select    list of column names OR list of column numbers OR select all columns
+        """
+        
+        # check all the column names to return
+        if isinstance(cols_to_select, list):
+            for column in cols_to_select:
+                self._check_column_valid(column)
+                
+        ids = np.random.permutation(self.get_number_of_rows())[:nsample]
+        if isinstance(cols_to_select, list):
+            return self._data.iloc[ids][cols_to_select]
+        else:
+            return self._data.iloc[ids]
+        
+        
+    def get_array_of_colors(self, mag_columns, nsample=None):
+        """Return numpy array of colors by subtracting magnitude columns in order supplied. Also returns
+           the standard deviation of each sample of colors
+        
+           @param mag_columns     names of columns containing magnitudes. Must be supplied in correct order
+                                  so color1 = mag_col1 - mag_col2
+                                     color2 = mag_col2 - mag_col3 etc
+           @param nsample         number of entries from table to select, if less than table size, randomly
+                                  selects the entries
+                                  
+           Returns: 
+           - dataframe of colors for each galaxy in sample, column names are colors
+           
+        """
+        
+        if (nsample==None):
+            nsample = self.get_number_of_rows()
+        
+        if (nsample<self.get_number_of_rows()):
+            data = self.get_random_subsample(nsample)
+        else:
+            data = self._data
+            
+        
+        # check all the column names to return
+        for column in mag_columns:
+            self._check_column_valid(column)
+        
+        color_array = np.zeros((nsample, len(mag_columns)-1))
+        color_names = []
+        for i in range(len(mag_columns)-1):
+        
+            color_array[:,i] = data[mag_columns[i]] - data[mag_columns[i+1]]
+            color_names.append(str(mag_columns[i]) + "-" + str(mag_columns[i+1]) )
+        
+        # convert to dataframe and return
+        return pd.DataFrame(color_array, columns=color_names)
+
         
         
     def _check_column_valid(self, column):
