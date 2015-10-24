@@ -4,6 +4,13 @@ This directory will contain the filter transmission data. Currently it is in the
 special header format) with two columns: first column is wavelengths in **ANGSTROMS** and second column is the
 filter transmission (no units, value between 0 and 1). 
 
+ALL FILTER NAMES MUST FOLLOW THIS FORMAT:
+[FILTERSETNAME]_[FILTERBAND].[EXTENSION]
+e.g.
+SDSS_u.dati
+TOPHAT_UV2800.dati
+LSST_u.dat
+
 Each filter is contained within its own text file. The name of the text file is important as it is used to 
 refer to the filter throughout the code. The wavelengths of the filters in the file should begin and end at 
 the filter edges (to avoid unnecessary integration).
