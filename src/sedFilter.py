@@ -6,11 +6,12 @@
   EmissionLine: holds emission line model (TO BE IMPLEMENTED)
   
   Helper functions:
-  createSedDict:    Reads list of SEDs from a file, then write their data into a dictionary (of SED objects)
-  createFilterDict: Reads list of filters from a file, then writes their data into a dictionary 
-                    (of Filter objects)
-  getFilterList:    Reads list of filters from a file and returns the name of each filter as a list
-  
+  createSedDict:        Reads list of SEDs from a file, then write the data into a dictionary (of SED objects)
+  createFilterDict:     Reads list of filters from a file, then writes their data into a dictionary 
+                        (of Filter objects)
+  getFilterList:        Reads list of filters from a file and returns the name of each filter as a list
+  orderFiltersByLamEff: Order the filters in a dictionary by their effective wavelength, return ordered list
+                        of strings of their names
   
 
 """
@@ -226,6 +227,7 @@ class Filter(object):
     
     def getFilterEffectiveWL(self):
         """Calculate effective wavelength of the filter"""
+        # should this be just int F(lam)*lam dlam / int F(lam) dlam ????
         
         top = integ.quad(self._integrand1, self.lamMin, self.lamMax)[0]
         bot = integ.quad(self._integrand2, self.lamMin, self.lamMax)[0]
@@ -279,7 +281,7 @@ def createSedDict(listOfSedsFile, pathToFile):
            
         sedData = np.loadtxt(pathToFile + "/" + line.rstrip())
         sedName = line.rstrip().split('.')[0]
-        print "Adding filter", sedName ,"to dictionary"
+        print "Adding SED", sedName ,"to dictionary"
         
         sed = SED(sedData[:,0], sedData[:,1])
         sedDict[sedName] = sed
@@ -325,4 +327,24 @@ def getFilterList(listOfFiltersFile, pathToFile):
     return filterList
        
     
-
+def orderFiltersByLamEff(filterDict):
+    """Order the filters in a dictionary by their effective wavelength. Returns list of str's of filter names
+       sorted in order of ascending effective wavelenght
+       
+       @param filterDict    dictionary of filters: keyword=filter name, value = Filter object
+    """
+    
+    # process each entry to get filter name and calculate effective wavelength
+    filter_order = []
+    filter_effWave = []
+    for filtname, filt in filterDict.items():
+        
+        filter_order.append(filtname)
+        filter_effWave.append(filt.getFilterEffectiveWL())
+                
+    # sort based upon effective wavlength
+    filter_order = [name for (lam,name) in sorted(zip(filter_effWave, filter_order))]
+    
+    return filter_order
+    
+    
