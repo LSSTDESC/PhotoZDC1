@@ -9,6 +9,7 @@ import astropy.io.fits as fits
 from astropy.table import Table
 import pandas as pd
 import operator
+import difflib
 
 # operator look up dictionary
 ops = {"==": operator.eq, "!=": operator.ne, ">": operator.gt, ">=": operator.ge, "<": operator.lt,
@@ -99,6 +100,19 @@ class ReadCosmoSim(object):
         """Return column names
         """
         return self._col_names
+        
+    def get_column_names_containing(self, string):
+        """Return list of column names that contain "string"
+        
+           @param string    partial string column names must containg
+        """
+        
+        col_list = []
+        for col in self._col_names:
+            if string in col:
+                col_list.append(col)
+        
+        return col_list
         
         
     def get_column(self, column, selection=None):
@@ -199,15 +213,16 @@ class ReadCosmoSim(object):
             return self._data.iloc[ids]
         
         
-    def get_array_of_colors(self, mag_columns, nsample=None):
-        """Return numpy array of colors by subtracting magnitude columns in order supplied. Also returns
-           the standard deviation of each sample of colors
+    def get_array_of_colors(self, mag_columns, nsample=None, filter_order=None):
+        """Return numpy array of colors by subtracting magnitude columns in order supplied. 
         
            @param mag_columns     names of columns containing magnitudes. Must be supplied in correct order
                                   so color1 = mag_col1 - mag_col2
                                      color2 = mag_col2 - mag_col3 etc
            @param nsample         number of entries from table to select, if less than table size, randomly
                                   selects the entries
+           @param filter_order    if supplied renames columns of data frame according to names in filter_order
+                                  MUST MATCH ORDER OF MAG_COLUMNS
                                   
            Returns: 
            - dataframe of colors for each galaxy in sample, column names are colors
@@ -222,17 +237,31 @@ class ReadCosmoSim(object):
         else:
             data = self._data
             
+        # Check the columns
+        if (filter_order != None):
+            if ( len(filter_order) != len(mag_columns) ):
+                msg = "ERROR! column number (" + str(len(mag_columns)) + ") and "
+                msg +="filter number (" + str(len(filter_order)) + ") don't match"
+                raise ValueError(msg)
         
-        # check all the column names to return
-        for column in mag_columns:
-            self._check_column_valid(column)
+            # check all the columns to return (also visually that they match the filter names!)
+            for column, filt in zip(mag_columns, filter_order):
+                print "col =", column ,"filter =", filt ,"match??"
+                self._check_column_valid(column)
+        else:
+            for column in mag_columns:
+                self._check_column_valid(column)
+        
         
         color_array = np.zeros((nsample, len(mag_columns)-1))
         color_names = []
         for i in range(len(mag_columns)-1):
         
             color_array[:,i] = data[mag_columns[i]] - data[mag_columns[i+1]]
-            color_names.append(str(mag_columns[i]) + "-" + str(mag_columns[i+1]) )
+            if (filter_order != None):
+                color_names.append(str(filter_order[i]) + "-" + str(filter_order[i+1]) )
+            else:
+                color_names.append(str(mag_columns[i]) + "-" + str(mag_columns[i+1]) )
         
         # convert to dataframe and return
         return pd.DataFrame(color_array, columns=color_names)
@@ -252,5 +281,33 @@ class ReadCosmoSim(object):
             if (column not in self._col_names):
                 raise ValueError("ERROR! column name (" + column + ") not valid!")
                 
-                
-                
+            
+# would like to develop this method
+# however it doesn't quite work because for some reason:
+# with "SDSS_u" difflib.get_close_matches thinks
+# 'SDSS_z_Absolute' is closer a match than 'SDSS_u_Absolute'
+# edit distance algos don't seem to work right either?
+
+#def mapNames(adopted_names, alt_names, match_quality):
+#    """Create dictionary mapping "adopted" names (e.g. name of filter) to "alternate" name (e.g. name of 
+#       column in catalog containing magnitudes in the corresponding filter) 
+#    
+#       @param adopted_names   "adopted" or "offical" name of some quantity
+#       @param alt_names       "alternate" name for the same quantity
+#       @param match_quality   between 0 and 1, want to keep this low as names will be fairly different
+#    """
+#    
+#    for name in alt_names:
+#        difflib.get_close_matches(name, adopted_names, 1, match_quality)
+#        
+
+def orderMagnitudeColumns(filter_order, map_filtname_to_colname):
+    """Given order of filters supplied, and mapping between filter names and column names, 
+       return a list of the column names in the same order as the filters
+    """
+     
+    column_filter = []
+    for filt in filter_order:
+        column_filter.append(map_filtname_to_colname[filt])
+        
+    return column_filter
