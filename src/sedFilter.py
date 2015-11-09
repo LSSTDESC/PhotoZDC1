@@ -311,10 +311,19 @@ def createFilterDict(listOfFiltersFile, pathToFile):
            
     return filterDict
     
-
+def getNames(filter_or_sed_dict):
+    """Return unordered list of all filter names or SED names in the dictionary supplied 
+    """
+    name_list = []
+    for key, value in filter_or_sed_dict.iteritems():
+        name_list.append(key)
+    
+    return name_list
     
 def getFilterList(listOfFiltersFile, pathToFile):
-    """Read file containing list of filters to read, place the filter names into a list"""
+    """Read file containing list of filters to read, place the filter names into a list
+       Order filters listed in file is preserved                                                           
+    """
     
     f = open(pathToFile + "/" + listOfFiltersFile)
         
