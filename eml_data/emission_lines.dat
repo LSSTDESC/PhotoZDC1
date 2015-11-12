@@ -1,0 +1,23 @@
+# What is being masked within the below ranges
+# (0)  Lyman alpha 1216
+# (1)  OII doublet 3726, 3729
+# (2)  [NeIII] 3868, Balmer H8 3889, Balmer H9 3835
+# (3)  CaII KH doublet 3934, 3968, [NeIII] 3967
+# (4)  H-delta 4101
+# (5)  H-gamma 4341, [OIII] 4363
+# (6)  H-beta 4861, [OIII] 4968, 5007
+# (7)  NaI doublet 5890, 5896
+# (8)  [OI] 6300, [SIII] 6312
+# (9)  H-alpha 6563, [NII] 6549, 6583
+# (10) [SII] doublet 6717, 6731
+1185 1235
+3684 3784
+3820 3920
+3910 4010
+4070 4170
+4292 4392
+4815 5055
+5823 5923
+6250 6350
+6525 6625
+6670 6775
