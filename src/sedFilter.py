@@ -3,6 +3,7 @@
   Classes:
   SED:          holds flux vs wavelength data
   Filter:       holds transmission vs wavelength data
+  MaskSEDs      mask emission line regions of rest-frame SEDs
   EmissionLine: holds emission line model (TO BE IMPLEMENTED)
   
   Helper functions:
@@ -19,6 +20,8 @@
 import scipy.interpolate as interp
 import scipy.integrate as integ
 import numpy as np
+import itertools
+import collections
 
 
 
@@ -254,6 +257,212 @@ class Filter(object):
         """Return filter transmission / lambda """
         return self.getTrans(lam)/lam
         
+        
+    
+class MaskSEDs(object):
+
+
+    def __init__(self, sedDict, emission_lines_file, wltrans=-1, dwfine=0.1, dwcoarse=100.):
+        """For SEDs in sedDict mask out wavelength ranges read from emission_lines_file. Wavelength ranges
+           correspond to regions where strong nebular emission lines occur in galaxies.
+           
+           Bluer/visible part of SED can be set to have a higher resolution in wavelength than the 
+           redder (IR) part. Translation to coarser resolution happens at wavelength set by wltrans.
+        
+           If wltrans=-1 only resolution defined by dwfine is used, and SED has a constant resolution
+           
+           @param sedDict                dictionary containing SED set
+           @param emission_lines_file    file containing regions of SED to mask
+           @param dwfine                 fine wavelength resolution
+           @param dwcoarse               coarse wavelength resolution
+           @param wltrans                wavelength to transition between fine and coarse resolution at
+        """
+        
+        self.sedDict = sedDict
+        self.nsed = len(sedDict)
+        self.dwfine = dwfine
+        self.wlgrid = self._create_wavelength_grid(wltrans, dwfine, dwcoarse)
+        self.wlnorm = 5500.  # normalise SEDs to 1 at 5500A
+        
+        # wavelength ranges containing common emission lines in angstroms
+        self.el = np.loadtxt(emission_lines_file)
+        
+      
+    def return_masked_SEDs(self):
+        """Do SED masking and return
+        """
+
+        masked_seds = np.zeros([self.nsed, self.nwl])
+
+        # change to: for ised (sedname, sed) in enumerate(self.sedDict.items()):
+        for (sedname, sed), ised in zip(self.sedDict.items(), xrange(self.nsed)):
+
+            # constant to divide by so SED is normalised to 1 at wlnorm
+            flux_norm = sed.getFlux(self.wlnorm)
+
+            # book-keeping for which emission line masking range we are on
+            iLine = 0 
+    
+            iterator = zip(self.wlgrid, xrange(self.nwl)).__iter__()
+            for wl, iwl in iterator:
+        
+                # if wl within masking region, perform masking
+                if (iLine<len(self.el) and wl>=self.el[iLine,0]):
+            
+                    # number of wavelength grid points within masking range
+                    nwlr = int( round( (self.el[iLine,1]-self.el[iLine,0])/self.dwfine ) )
+            
+                    # end wl grid point within masking range
+                    wln = wl + self.dwfine*nwlr
+            
+                    # interpolate across this space
+                    y0 = sed.getFlux(wl)/flux_norm
+                    yn = sed.getFlux(wln)/flux_norm               
+                    masked_seds[ised, iwl:iwl+nwlr+1] = self._mini_interp(wl, wln, y0, yn, self.dwfine)
+            
+                    # advance iterator to skip to the end of this masking region
+                    iLine += 1
+                    self._consume(iterator, nwlr)
+            
+                else:
+                    masked_seds[ised, iwl] = sed.getFlux(wl)/flux_norm
+
+    
+            # temporary time saver while testing
+            #if (ised>1):
+            #    break
+      
+        return masked_seds
+                 
+      
+    def return_unmasked_SEDs(self):
+        """Return SEDs unmasked (but on same grid as masked SEDs)
+        
+        """
+
+        unmasked_seds = np.zeros([self.nsed, self.nwl])
+        for (sedname, sed), ised in zip(self.sedDict.items(), xrange(self.nsed)):
+
+            for wl, iwl in zip(self.wlgrid, xrange(self.nwl)):
+    
+                flux_norm = sed.getFlux(self.wlnorm)
+                unmasked_seds[ised, iwl] = sed.getFlux(wl)/flux_norm
+        
+            # temporary time saver while testing
+            #if (ised>1):
+            #    break
+                
+        return unmasked_seds
+        
+        
+    def return_wl_grid(self):
+        """Return the wavelength grid of the SEDs"""
+        return self.wlgrid
+        
+      
+    def set_wavelength_norm(self, wlnorm):
+        """Reset wavelength to normalise SEDs to 1 at
+        
+           @param wlnorm   wavelength in Angstroms
+        """
+        self.wlnorm = wlnorm
+        
+      
+    def _create_wavelength_grid(self, wltrans, dwfine, dwcoarse):
+        """
+           if wltrans=-1 only fine resolution is used and SED has constant resolution
+        
+           @param sedDict   dictionary containing SED set
+           @param dwfine    fine wavelength resolution
+           @param dwcoarse  coarse wavelength resolution
+           @param wltrans   wavelength to transition between fine and coarse resolution
+        
+        """
+    
+        # first find the range
+        minwl, maxwl = self._find_wl_range()
+
+
+        if (wltrans>-1):
+            # fine resolution
+            nfine = int(round((wltrans - minwl)/dwfine + 1.))
+            wltrans = dwfine*(nfine-1.) + minwl
+
+            # coarse resolution
+            ncoarse = int(round((maxwl - (wltrans + dwcoarse))/dwcoarse + 1.))
+        
+            self.nwl = nfine + ncoarse
+        else:
+            # constant resolution
+            self.nwl = int(round((maxwl - minwl)/dwfine + 1.))
+
+
+        # create grid
+        wlgrid = []
+        for i in range(self.nwl):
+    
+            # case of differing resolutions
+            if (wltrans>-1):
+                if (i<nfine):
+                    wl = minwl + i*dwfine
+                else:
+                    wl = (wltrans + dwcoarse) + (i-nfine)*dwcoarse
+
+            # case of constant resolution
+            else:
+                wl = minwl + i*dwfine
+    
+            wlgrid.append(wl)
+            
+        return wlgrid
+        
+        
+    def _find_wl_range(self):
+        """find wavelength range of SEDs"""
+        
+        minwl = 1e10
+        maxwl = -1e10
+        for sedname, sed in self.sedDict.items():
+        
+            wll, wlh = sed.returnSedRange()
+            if (wll<minwl):
+                minwl = wll
+
+            if (wlh>maxwl):
+                maxwl = wlh
+
+        print "Wavelength range of SEDs:", minwl , "to" , maxwl ,"angstroms"
+        return minwl, maxwl
+        
+    
+    def _consume(self, iterator, n):
+        """eats the next n iterations from iterator"""
+        collections.deque(itertools.islice(iterator, n))
+    
+    
+    def _mini_interp(self, x0, xn, y0, yn, dx):
+        """interpolate between x0 and xn, include points at both x0 and xn on return
+    
+           x0,y0   start point of interpolation
+           xn,yn   end point of interpolation
+           dx      exact spacing between x0 and xn 
+        """
+        np = (xn-x0)/dx
+        if (np%2 != 0):
+            raise ValueError("ERROR! x0 and xn are not evenly spaced")
+    
+        # linear interp parameters
+        m = (yn-y0)/(xn-x0)
+        c = y0 - m*x0
+    
+        np = int(np+1)
+        yinterp = []
+        for i in range(np):
+            x = x0 + i*dx
+            yinterp.append(m*x + c)
+        
+        return yinterp
+        
 
 class EmissionLine(object):
 
@@ -266,7 +475,7 @@ class EmissionLine(object):
         
 #### Helper functions ####
 
-def createSedDict(listOfSedsFile, pathToFile):
+def createSedDict(listOfSedsFile, pathToFile="../sed_data/"):
     """Read file containing list of SEDs to read, then read these SEDs into a dictionary
     
        Dictionary keyword is a string: name of the file that contained the filter (without path or extension)
@@ -289,7 +498,7 @@ def createSedDict(listOfSedsFile, pathToFile):
     return sedDict
     
 
-def createFilterDict(listOfFiltersFile, pathToFile):
+def createFilterDict(listOfFiltersFile, pathToFile="../filter_data/"):
     """Read file containing list of filters to read, then read these filters into a dictionary
     
        Dictionary keyword is a string: name of the file that contained the filter (without path or extension)
@@ -320,7 +529,8 @@ def getNames(filter_or_sed_dict):
     
     return name_list
     
-def getFilterList(listOfFiltersFile, pathToFile):
+    
+def getFilterList(listOfFiltersFile, pathToFile="../filter_data/"):
     """Read file containing list of filters to read, place the filter names into a list
        Order filters listed in file is preserved                                                           
     """
@@ -356,4 +566,9 @@ def orderFiltersByLamEff(filterDict):
     
     return filter_order
     
-    
+
+
+
+
+
+
