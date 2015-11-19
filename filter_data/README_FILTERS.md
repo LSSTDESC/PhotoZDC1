@@ -19,6 +19,9 @@ The `*.filter` files are the list of all filters belonging to a particular filte
 to read in the desired set of filters.
 
 The LSST filter transmissions were obtained from the [LSST github repo](https://github.com/lsst/throughputs)
+Including the component transmissions:
+atmos.dat detector.dat m1.dat m2.dat m3.dat lens1.dat lens2.dat lens3.dat
+filter_u.dat filter_g.dat filter_r.dat filter_i.dat filter_z.dat filter_y.dat
 
 The Johnson filter transmissions are from BPZ
 

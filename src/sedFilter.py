@@ -464,6 +464,56 @@ class MaskSEDs(object):
         return yinterp
         
 
+class MakeBandpass(object):
+    
+    def __init__(self, wavelen_min=3000., wavelen_max=12000., wavelen_step=10.):
+        """Initialise bandpass as transmission=1 along supplied wavelength grid
+        
+           @param wavelen_min    minimum wavelength in Angstroms
+           @param wavelen_max    maximum wavelength in Angstroms
+           @param wavelen_step   step in wavelength in Angstroms
+        """
+        # initialise wavelength grid
+        self.setWavelenLimits(wavelen_min, wavelen_max, wavelen_step)
+        self.wavelen = np.arange(self.wavelen_min, self.wavelen_max+self.wavelen_step/2., self.wavelen_step,
+                                    dtype='float')
+                                    
+        # initialise transmission to 1.
+        self.trans = np.ones(len(self.wavelen), dtype='float')
+    
+
+    def setWavelenLimits(self, wavelen_min, wavelen_max, wavelen_step):
+        """
+        Set internal records of wavelen limits, _min, _max, _step.
+        """
+        # If we've been given values for wavelen_min, _max, _step, set them here.
+        if wavelen_min is not None:
+            self.wavelen_min = wavelen_min
+        if wavelen_max is not None:
+            self.wavelen_max = wavelen_max
+        if wavelen_step is not None:
+            self.wavelen_step = wavelen_step
+        return
+        
+        
+    def make_band(self, componentList=['detector.dat', 'lens1.dat','lens2.dat', 'lens3.dat',
+                                                'm1.dat', 'm2.dat', 'm3.dat','atmos.dat'],
+                                                path_to_files = '.'):
+                                                
+        for component in componentList:
+            
+            transmission_data = np.loadtxt(path_to_files +"/" + component)
+            trans = interp.InterpolatedUnivariateSpline(transmission_data[:,0], transmission_data[:,1], k=1)
+            self.trans *= trans(self.wavelen)
+            
+        
+    def write_throughput(self, filename, path_to_file):
+        """Write throughput to filename """
+
+        trans = np.transpose(np.vstack((self.wavelen, self.trans)))
+        np.savetxt(path_to_file + "/" + filename, trans)
+        
+    
 class EmissionLine(object):
 
     def __init__(self, emissionLinePars):
