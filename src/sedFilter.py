@@ -47,7 +47,8 @@ class SED(object):
         # keep track of original range and resolution of SED 
         self.lamMin = waveLengths[0]
         self.lamMax = waveLengths[-1]
-        self.nLam = len(waveLengths)    
+        self.nLam = len(waveLengths)
+        self.waveLengths = waveLengths
         
         if (self.lamMin<0.):
             raise ValueError("ERROR! wavelengths cannot be less than zero!")
@@ -262,103 +263,124 @@ class Filter(object):
 class MaskSEDs(object):
 
 
-    def __init__(self, sedDict, emission_lines_file, wltrans=-1, dwfine=0.1, dwcoarse=100.):
-        """For SEDs in sedDict mask out wavelength ranges read from emission_lines_file. Wavelength ranges
+    def __init__(self, origSEDs, emission_lines_file):
+        """For SEDs in origSEDs mask out wavelength ranges read from emission_lines_file. Wavelength ranges
            correspond to regions where strong nebular emission lines occur in galaxies.
-           
-           Bluer/visible part of SED can be set to have a higher resolution in wavelength than the 
-           redder (IR) part. Translation to coarser resolution happens at wavelength set by wltrans.
         
-           If wltrans=-1 only resolution defined by dwfine is used, and SED has a constant resolution
            
-           @param sedDict                dictionary containing SED set
-           @param emission_lines_file    file containing regions of SED to mask
-           @param dwfine                 fine wavelength resolution
-           @param dwcoarse               coarse wavelength resolution
-           @param wltrans                wavelength to transition between fine and coarse resolution at
+           @param origSEDs                dictionary containing SED set
+           @param emission_lines_file    file containing regions of SED to maskat
         """
         
-        self.sedDict = sedDict
-        self.nsed = len(sedDict)
-        self.dwfine = dwfine
-        self.wlgrid = self._create_wavelength_grid(wltrans, dwfine, dwcoarse)
+        self.origSEDs = origSEDs
+        self.nsed = len(origSEDs)
         self.wlnorm = 5500.  # normalise SEDs to 1 at 5500A
+        
+        self.maskedSEDs = {}
         
         # wavelength ranges containing common emission lines in angstroms
         self.el = np.loadtxt(emission_lines_file)
         
       
-    def return_masked_SEDs(self):
-        """Do SED masking and return
-        """
-
-        masked_seds = np.zeros([self.nsed, self.nwl])
-
-        # change to: for ised (sedname, sed) in enumerate(self.sedDict.items()):
-        for (sedname, sed), ised in zip(self.sedDict.items(), xrange(self.nsed)):
+    def mask_SEDs(self):
+        """Do SED masking """
+        
+        for (sedname, sed), ised in zip(self.origSEDs.items(), xrange(self.nsed)):
+        #for ised (sedname, sed) in enumerate(self.origSEDs.items()):
 
             # constant to divide by so SED is normalised to 1 at wlnorm
             flux_norm = sed.getFlux(self.wlnorm)
+            
+            # get wavelength grid for this SED
+            wlgrid = sed.waveLengths
+            nwl = len(wlgrid)
+            
+            # array of masked SED fluxes
+            masked_sed = np.zeros((nwl, ))
+            #print masked_sed.shape
+            #print sedname
 
             # book-keeping for which emission line masking range we are on
             iLine = 0 
     
-            iterator = zip(self.wlgrid, xrange(self.nwl)).__iter__()
+            iterator = zip( wlgrid, xrange(nwl) ).__iter__()
             for wl, iwl in iterator:
-        
+
                 # if wl within masking region, perform masking
                 if (iLine<len(self.el) and wl>=self.el[iLine,0]):
-            
+                
+                    ### below works if resolution can be assumed to be constant
+                    # get resolution at this wavelength
+                    #dwl = wlgrid[iwl+1] - wlgrid[iwl]
+                    
                     # number of wavelength grid points within masking range
-                    nwlr = int( round( (self.el[iLine,1]-self.el[iLine,0])/self.dwfine ) )
+                    #
+                    #nwlr = int( round( (self.el[iLine,1]-self.el[iLine,0])/dwl ) )
             
                     # end wl grid point within masking range
-                    wln = wl + self.dwfine*nwlr
+                    #wln = wl + dwl*nwlr
+                    
+                    
+                    # To allow for varying resolution 
+                    # get end wl grid point within masking range
+                    # get number of wavelength grid points within masking range
+                    nwlr = iwl
+                    wln = wlgrid[nwlr]
+                    wlregion = [wl]
+                    while (wln<self.el[iLine,1]):
+                        nwlr += 1
+                        wln = wlgrid[nwlr]
+                        wlregion.append(wln)
+                    nwlr -= iwl
             
                     # interpolate across this space
                     y0 = sed.getFlux(wl)/flux_norm
-                    yn = sed.getFlux(wln)/flux_norm               
-                    masked_seds[ised, iwl:iwl+nwlr+1] = self._mini_interp(wl, wln, y0, yn, self.dwfine)
+                    yn = sed.getFlux(wln)/flux_norm        
+                    #print masked_sed[iwl:iwl+nwlr+1].shape
+                    #print self.el[iLine,0],self.el[iLine,1]
+                    #print wlregion
+                    #print self._mini_interp(wlregion, y0, yn)
+                    #print nwlr, iwl, iwl+nwlr+1
+                    masked_sed[iwl:iwl+nwlr+1] = self._mini_interp(wlregion, y0, yn)
+                    #self._mini_interp(wl, wln, y0, yn, dwl)
             
                     # advance iterator to skip to the end of this masking region
                     iLine += 1
                     self._consume(iterator, nwlr)
             
                 else:
-                    masked_seds[ised, iwl] = sed.getFlux(wl)/flux_norm
+                    masked_sed[iwl] = sed.getFlux(wl)/flux_norm
+                    
+            sed = SED(wlgrid, masked_sed)
+            self.maskedSEDs[sedname] = sed
 
     
             # temporary time saver while testing
             #if (ised>1):
             #    break
-      
-        return masked_seds
                  
       
-    def return_unmasked_SEDs(self):
-        """Return SEDs unmasked (but on same grid as masked SEDs)
+    def return_masked_SEDs(self):
+        """Return newly masked SEDs """        
+        return self.maskedSEDs
         
-        """
-
-        unmasked_seds = np.zeros([self.nsed, self.nwl])
-        for (sedname, sed), ised in zip(self.sedDict.items(), xrange(self.nsed)):
-
-            for wl, iwl in zip(self.wlgrid, xrange(self.nwl)):
+        
+    def write_masked_SEDs(self, pathToFile, output_file_ext):
+        """ """
+        for ised, (sedname, sed) in enumerate(self.maskedSEDs.items()):
     
-                flux_norm = sed.getFlux(self.wlnorm)
-                unmasked_seds[ised, iwl] = sed.getFlux(wl)/flux_norm
-        
-            # temporary time saver while testing
-            #if (ised>1):
-            #    break
-                
-        return unmasked_seds
-        
-        
-    def return_wl_grid(self):
-        """Return the wavelength grid of the SEDs"""
-        return self.wlgrid
-        
+            fname = pathToFile + sedname + output_file_ext
+            
+            wlgrid = sed.waveLengths
+            
+            flux = []
+            for wl in wlgrid:
+                flux.append(sed.getFlux(wl))
+            flux = np.asarray(flux)
+    
+            X = np.column_stack((wlgrid, flux))
+            np.savetxt(fname, X)
+            
       
     def set_wavelength_norm(self, wlnorm):
         """Reset wavelength to normalise SEDs to 1 at
@@ -367,72 +389,6 @@ class MaskSEDs(object):
         """
         self.wlnorm = wlnorm
         
-      
-    def _create_wavelength_grid(self, wltrans, dwfine, dwcoarse):
-        """
-           if wltrans=-1 only fine resolution is used and SED has constant resolution
-        
-           @param sedDict   dictionary containing SED set
-           @param dwfine    fine wavelength resolution
-           @param dwcoarse  coarse wavelength resolution
-           @param wltrans   wavelength to transition between fine and coarse resolution
-        
-        """
-    
-        # first find the range
-        minwl, maxwl = self._find_wl_range()
-
-
-        if (wltrans>-1):
-            # fine resolution
-            nfine = int(round((wltrans - minwl)/dwfine + 1.))
-            wltrans = dwfine*(nfine-1.) + minwl
-
-            # coarse resolution
-            ncoarse = int(round((maxwl - (wltrans + dwcoarse))/dwcoarse + 1.))
-        
-            self.nwl = nfine + ncoarse
-        else:
-            # constant resolution
-            self.nwl = int(round((maxwl - minwl)/dwfine + 1.))
-
-
-        # create grid
-        wlgrid = []
-        for i in range(self.nwl):
-    
-            # case of differing resolutions
-            if (wltrans>-1):
-                if (i<nfine):
-                    wl = minwl + i*dwfine
-                else:
-                    wl = (wltrans + dwcoarse) + (i-nfine)*dwcoarse
-
-            # case of constant resolution
-            else:
-                wl = minwl + i*dwfine
-    
-            wlgrid.append(wl)
-            
-        return wlgrid
-        
-        
-    def _find_wl_range(self):
-        """find wavelength range of SEDs"""
-        
-        minwl = 1e10
-        maxwl = -1e10
-        for sedname, sed in self.sedDict.items():
-        
-            wll, wlh = sed.returnSedRange()
-            if (wll<minwl):
-                minwl = wll
-
-            if (wlh>maxwl):
-                maxwl = wlh
-
-        print "Wavelength range of SEDs:", minwl , "to" , maxwl ,"angstroms"
-        return minwl, maxwl
         
     
     def _consume(self, iterator, n):
@@ -440,28 +396,51 @@ class MaskSEDs(object):
         collections.deque(itertools.islice(iterator, n))
     
     
-    def _mini_interp(self, x0, xn, y0, yn, dx):
+    def _mini_interp(self, xregion, y0, yn):
         """interpolate between x0 and xn, include points at both x0 and xn on return
+    # 
+    #        x0,y0   start point of interpolation
+    #       xn,yn   end point of interpolation
+    #       dx      exact spacing between x0 and xn 
+    #    """
     
-           x0,y0   start point of interpolation
-           xn,yn   end point of interpolation
-           dx      exact spacing between x0 and xn 
-        """
-        np = (xn-x0)/dx
-        if (np%2 != 0):
-            raise ValueError("ERROR! x0 and xn are not evenly spaced")
-    
+        np = len(xregion)
+        x0 = xregion[0]
+        xn = xregion[-1]
+
         # linear interp parameters
         m = (yn-y0)/(xn-x0)
         c = y0 - m*x0
     
-        np = int(np+1)
         yinterp = []
-        for i in range(np):
-            x = x0 + i*dx
+        for x in xregion:
             yinterp.append(m*x + c)
-        
+     
         return yinterp
+
+    
+    #def _mini_interp(self, x0, xn, y0, yn, dx):
+    #    """interpolate between x0 and xn, include points at both x0 and xn on return
+    # 
+    #        x0,y0   start point of interpolation
+    #       xn,yn   end point of interpolation
+    #       dx      exact spacing between x0 and xn 
+    #    """
+    #    np = (xn-x0)/dx
+    #    if (np%2 != 0):
+    #        raise ValueError("ERROR! x0 and xn are not evenly spaced")
+    #
+    #    # linear interp parameters
+    #    m = (yn-y0)/(xn-x0)
+    #    c = y0 - m*x0
+    # 
+    #    np = int(np+1)
+    #    yinterp = []
+    #    for i in range(np):
+    #        x = x0 + i*dx
+    #        yinterp.append(m*x + c)
+    #    
+    #    return yinterp
         
 
 class MakeBandpass(object):
@@ -503,8 +482,12 @@ class MakeBandpass(object):
         for component in componentList:
             
             transmission_data = np.loadtxt(path_to_files +"/" + component)
+            if (np.max(transmission_data[:,1])>1.):
+                print "ARGEHHH max transmission of", component , np.max(transmission_data[:,1])
             trans = interp.InterpolatedUnivariateSpline(transmission_data[:,0], transmission_data[:,1], k=1)
             self.trans *= trans(self.wavelen)
+            #if (np.max(self.trans)>1.):
+            #    print "ARGEHHH"
             
         
     def write_throughput(self, filename, path_to_file):
