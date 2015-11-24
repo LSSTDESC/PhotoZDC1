@@ -20,6 +20,7 @@
 from sklearn.cluster import KMeans
 import numpy as np
 import pandas as pd
+import time
 
 import photometry as phot
 
@@ -49,30 +50,34 @@ def get_sed_colors(sedDict, filterDict):
     
     # calculate SED colors
     sed_colors = np.zeros((nseds, ncolors))
+    sed_names = []
     i=0
+    tot_time = 0.
     for sedname, sed in sedDict.items():
     
         print "Calculating colors for SED:", sedname
+        sed_names.append(sedname)
         p = phot.PhotCalcs(sed, filterDict)
   
+        start_time = time.time()
         for j in range(ncolors):
         
             sed_colors[i,j] = p.computeColor(filter_order[j], filter_order[j+1], 0.)
-
+        end_time = time.time()
+        print "Took", end_time - start_time, "to compute", ncolors, "colors"
+        tot_time += (end_time - start_time)
         i+=1
-    
-    
+    print "Total time to compute colors for SEDs =", tot_time
     
     # convert to dataframe and return
-    return pd.DataFrame(sed_colors, columns=color_names)
+    return pd.DataFrame(sed_colors, columns=color_names, index=sed_names)
 
 
-def check_color_match(galaxy_colors, sed_colors, name_mapping, nstd=3.):
+def check_color_match(galaxy_colors, sed_colors, nstd=3.):
     """Check typical distance between galaxy colors and colors of the SED set
     
        @param galaxy_colors   pd dataframe of galaxy colors (row=galaxy, column=color)
        @param sed_colors      pd dataframe of SED colors (row=SED, column=color: same order as galaxy_colors)
-       @param name_mapping    dictionary mapping filter names to catalog column names
        @param nstd            number of standard deviation to check an SED is within range of
     """
     
@@ -81,10 +86,11 @@ def check_color_match(galaxy_colors, sed_colors, name_mapping, nstd=3.):
     print "Number of colors =", ncolors
     print "Number of SEDs =", nseds
     
-    
+    # mean and std of each galaxy color in simulation
     mean_colors = galaxy_colors.mean(axis=0)
     std_colors = galaxy_colors.std(axis=0)
     
+    # poor_match is a list of SEDs that don't match each color
     poor_match = [ [] for c in range(ncolors) ]
     for i in range(ncolors):
             
@@ -92,6 +98,7 @@ def check_color_match(galaxy_colors, sed_colors, name_mapping, nstd=3.):
             # define acceptable range as being within some n stds of the mean color of all galaxies
             max_color = mean_colors[i] + nstd*std_colors[i]
             min_color = mean_colors[i] - nstd*std_colors[i]
+            #print "Range SED must lie within:", min_color ,"to", max_color
             
             # check all SEDs are within this range and append to this color's list if not
             for j in range(nseds):
@@ -129,6 +136,7 @@ def perform_color_match(galaxy_colors, sed_colors, poor_match, tol=1):
     
     ncolors = galaxy_colors.shape[1]
     nseds = sed_colors.shape[0]
+    print sed_colors.columns
     
     # int array of which colors to select
     good_colors = []
@@ -149,5 +157,6 @@ def perform_color_match(galaxy_colors, sed_colors, poor_match, tol=1):
     # if you take labels out after one iteration then KMeans just finds all points closest to each SED color
     sed_label = color_cluster.labels_
     
-    return sed_label
+    return sed_colors.index.values[sed_label]
+    
     
