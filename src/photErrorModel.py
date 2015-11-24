@@ -172,8 +172,9 @@ class LSSTErrorModel(BaseErrorModel, PhotCalcs):
             self.nYrObs = pars["nYrObs"]
             
         # number of visits per year
+        # change to 1 in each filter to get SINGLE VISIT errors (along with having self.nYrObs=1)
         if "nVisYr" not in pars:
-            self.nVisYr = {'LSSTu':6,'LSSTg':8,'LSSTr':18,'LSSTi':18,'LSSTz':16,'LSSTy':16}
+            self.nVisYr = {'LSST_u':6,'LSST_g':8,'LSST_r':18,'LSST_i':18,'LSST_z':16,'LSST_y':16}
         else:
             tmp = pars["nVisYr"]
             if (not isinstance(tmp, dict) or len(tmp)!=6):
@@ -184,7 +185,8 @@ class LSSTErrorModel(BaseErrorModel, PhotCalcs):
         
         # band dependent parameter
         if "gamma" not in pars:
-            self.gamma = {'LSSTu':0.037,'LSSTg':0.038,'LSSTr':0.039,'LSSTi':0.039,'LSSTz':0.040,'LSSTy':0.040}
+            self.gamma = {'LSST_u':0.037,'LSST_g':0.038,'LSST_r':0.039,'LSST_i':0.039,'LSST_z':0.040,
+                          'LSST_y':0.040}
         else:
             tmp = pars["gamma"]
             if (not isinstance(tmp, dict) or len(tmp)!=6):
@@ -195,7 +197,8 @@ class LSSTErrorModel(BaseErrorModel, PhotCalcs):
             
         # band dependent parameter
         if "Cm" not in pars:
-            self.Cm = {'LSSTu':23.60,'LSSTg':24.57,'LSSTr':24.57,'LSSTi':24.47,'LSSTz':24.19,'LSSTy':23.74}
+            self.Cm = {'LSST_u':23.60,'LSST_g':24.57,'LSST_r':24.57,'LSST_i':24.47,'LSST_z':24.19,
+                       'LSST_y':23.74}
         else:
             tmp = pars["Cm"]
             if (not isinstance(tmp, dict) or len(tmp)!=6):
@@ -206,7 +209,8 @@ class LSSTErrorModel(BaseErrorModel, PhotCalcs):
             
         # sky brightness
         if "msky" not in pars:
-            self.msky = {'LSSTu':21.8,'LSSTg':22.0,'LSSTr':21.3,'LSSTi':20.0,'LSSTz':19.1,'LSSTy':17.5}
+            self.msky = {'LSST_u':21.8,'LSST_g':22.0,'LSST_r':21.3,'LSST_i':20.0,'LSST_z':19.1,
+                         'LSST_y':17.5}
         else:
             tmp = pars["msky"]
             if (not isinstance(tmp, dict) or len(tmp)!=6):
@@ -217,7 +221,8 @@ class LSSTErrorModel(BaseErrorModel, PhotCalcs):
             
         # seeing
         if "theta" not in pars:
-            self.theta = {'LSSTu':0.77,'LSSTg':0.73,'LSSTr':0.70,'LSSTi':0.67,'LSSTz':0.65,'LSSTy':0.63}
+            self.theta = {'LSST_u':0.77,'LSST_g':0.73,'LSST_r':0.70,'LSST_i':0.67,'LSST_z':0.65,
+                          'LSST_y':0.63}
         else:
             tmp = pars["theta"]
             if (not isinstance(tmp, dict) or len(tmp)!=6):
@@ -228,7 +233,8 @@ class LSSTErrorModel(BaseErrorModel, PhotCalcs):
         
         # extinction coefficient
         if "km" not in pars:
-            self.km = {'LSSTu':0.48,'LSSTg':0.21,'LSSTr':0.10,'LSSTi':0.07,'LSSTz':0.06,'LSSTy':0.06}
+            self.km = {'LSST_u':0.48,'LSST_g':0.21,'LSST_r':0.10,'LSST_i':0.07,'LSST_z':0.06,
+                       'LSST_y':0.06}
         else:
             tmp = pars["km"]
             if (not isinstance(tmp, dict) or len(tmp)!=6):
