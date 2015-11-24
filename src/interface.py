@@ -11,6 +11,8 @@ import pandas as pd
 import operator
 import difflib
 
+import sedMapper
+
 # operator look up dictionary
 ops = {"==": operator.eq, "!=": operator.ne, ">": operator.gt, ">=": operator.ge, "<": operator.lt,
        "<=": operator.le}
@@ -78,6 +80,8 @@ class ReadCosmoSim(object):
         #np.genfromtxt(file_to_read, dtype='float', names=True) # this is WAY slower
         self._col_names = self._data.columns
 
+
+    ### Getter methods
         
     def get_number_of_cols(self):
         """Return number of columns in file
@@ -90,6 +94,7 @@ class ReadCosmoSim(object):
         """
         return len(self._data)
         
+        
     def get_dimensions(self):
         """Return the size of each dimension in the file
         """
@@ -100,6 +105,7 @@ class ReadCosmoSim(object):
         """Return column names
         """
         return self._col_names
+        
         
     def get_column_names_containing(self, string):
         """Return list of column names that contain "string"
@@ -131,6 +137,8 @@ class ReadCosmoSim(object):
             condition = [(column, selection[0], selection[1])]
             return self.select_given_all_true(condition, cols_to_select=[column])
         
+        
+    ### Select from catalog methods
         
     # could make data selection method
     # args: cols_to_select, conditions (tuple of: (col, cond, val) e.g. (colname, '>', 10)
@@ -183,7 +191,8 @@ class ReadCosmoSim(object):
         
         
     def group_by_color(self, column1, column2, bins):
-        """Return a dataframe grouped into bins based upon a "color" (difference between two columns)
+        """Return a dataframe grouped into bins based upon a "color" (difference between two columns, doesn't
+           technicall HAVE to be a color)
            
            @param column     column name (str) or index (int)
            @param bins       bin edges to be used to group the data in column
@@ -213,21 +222,110 @@ class ReadCosmoSim(object):
             return self._data.iloc[ids]
         
         
-    def get_array_of_colors(self, mag_columns, nsample=None, filter_order=None):
-        """Return numpy array of colors by subtracting magnitude columns in order supplied. 
+    def get_array_of_colors(self, mag_columns, filter_names=None, nsample=None):
+        """Return pd dataframe of colors by subtracting magnitude columns in order supplied. 
         
            @param mag_columns     names of columns containing magnitudes. Must be supplied in correct order
                                   so color1 = mag_col1 - mag_col2
                                      color2 = mag_col2 - mag_col3 etc
+           @param filter_names    if supplied renames columns of data frame according to names in filter_names
+                                  MUST MATCH ORDER OF MAG_COLUMNS
            @param nsample         number of entries from table to select, if less than table size, randomly
                                   selects the entries
-           @param filter_order    if supplied renames columns of data frame according to names in filter_order
-                                  MUST MATCH ORDER OF MAG_COLUMNS
                                   
            Returns: 
            - dataframe of colors for each galaxy in sample, column names are colors
            
         """
+        
+        # data to use (either full dataset or random subsample of size nsample)
+        data, nsample = self._get_data(nsample)
+            
+            
+        # Check the columns are valid
+        self._check_all_columns(mag_columns, filter_names)
+        
+        
+        # Just return color dataframe
+        return self._get_colors(data, mag_columns, filter_names, nsample)
+        
+        
+    ### SEDMAPPER 
+    
+    def return_matched_catalog(self, mag_columns, filter_names, sed_colors, nsample=None, nstd=3., tol=1):
+        """ 
+           @param mag_columns     names of columns containing magnitudes. Must be supplied in correct order
+                                  so color1 = mag_col1 - mag_col2
+                                     color2 = mag_col2 - mag_col3 etc
+           @param filter_names    if supplied renames columns of data frame according to names in filter_names
+                                  MUST MATCH ORDER OF MAG_COLUMNS
+           @param nsample         number of entries from table to select, if less than table size, randomly
+                                  selects the entries
+           @param nstd            Number of standard deviations SED color must be within mean of galaxy
+                                  colors to be considered a "good" match
+           
+           @param tol             Tolerance: minimum number of SEDs a particular color must have a "good"
+                                  match with to be included in the mapping
+           
+                                  """
+  
+        # data to use (either full dataset or random subsample of size nsample)
+        data, nsample = self._get_data(nsample)
+
+ 
+        # Check the columns are valid
+        self._check_all_columns(mag_columns, filter_names)
+        
+        
+        # Get color dataframe to work with
+        print nsample, len(mag_columns)-1
+        color_array = self._get_colors(data, mag_columns, filter_names, nsample)
+
+
+        # Check match between galaxy colors and SEDs
+        # poor_matches is a list of SEDs, one for each color. Any SEDs in each list are defined to be
+        # a "poor" match to the color, i.e. the SED color is not within mean[color]+/-nstd*std[color]
+        # of the simulated galaxies
+        poor_matches = sedMapper.check_color_match(color_array, sed_colors, nstd)
+        
+        
+        # Find closest SED match to each galaxy, each color must have a minimum number=tol of SEDs 
+        # that are an OK match
+        sed_label = sedMapper.perform_color_match(color_array, sed_colors, poor_matches, tol)
+        
+        
+        # Add column of labels to data
+        data['sed_label'] = sed_label.tolist()
+        
+        # return data and color dataframes
+        return data, color_array
+        
+        
+    ### Helper methods
+    
+    def _get_colors(self, data, mag_columns, filter_names, nsample):
+        """Return dataframe of colors, if given, substitute column name for filter name  """
+        
+        color_array = np.zeros((nsample, len(mag_columns)-1))
+        color_names = []
+        
+        for i in range(len(mag_columns)-1):
+        
+            # calc galaxy color: simply data in mag_columns[i]-mag_columns[i+1]
+            color_array[:,i] = data[mag_columns[i]] - data[mag_columns[i+1]]
+            
+            # if filter_names supplied, replace magnitude column name with filter name
+            if (filter_names != None):
+                color_names.append(str(filter_names[i]) + "-" + str(filter_names[i+1]) )
+            else:
+                color_names.append(str(mag_columns[i]) + "-" + str(mag_columns[i+1]) )
+        
+        # convert to dataframe and return
+        return pd.DataFrame(color_array, columns=color_names)
+        
+
+    def _get_data(self, nsample):
+        """Get random realisation of data in dataframe, or full dataset"""
         
         if (nsample==None):
             nsample = self.get_number_of_rows()
@@ -237,36 +335,36 @@ class ReadCosmoSim(object):
         else:
             data = self._data
             
-        # Check the columns
-        if (filter_order != None):
-            if ( len(filter_order) != len(mag_columns) ):
+        return data, nsample
+        
+        
+    def _check_all_columns(self, mag_columns, filter_names):
+        """Check all names of columns containing magnitudes actually exist in the catalog 
+        
+           @param mag_columns   names of columns containing magnitudes
+           @param filter_names  names of the filters corresponding to the magnitudes 
+           
+           order of the above two lists must be the same!
+           If filter_names==None it is ignored
+        """
+        
+        if (filter_names != None):
+        
+            # checksum on number of filters vs number of columns
+            if ( len(filter_names) != len(mag_columns) ):
                 msg = "ERROR! column number (" + str(len(mag_columns)) + ") and "
-                msg +="filter number (" + str(len(filter_order)) + ") don't match"
+                msg +="filter number (" + str(len(filter_names)) + ") don't match"
                 raise ValueError(msg)
         
             # check all the columns to return (also visually that they match the filter names!)
-            for column, filt in zip(mag_columns, filter_order):
+            for column, filt in zip(mag_columns, filter_names):
                 print "col =", column ,"filter =", filt ,"match??"
                 self._check_column_valid(column)
         else:
+        
             for column in mag_columns:
                 self._check_column_valid(column)
-        
-        
-        color_array = np.zeros((nsample, len(mag_columns)-1))
-        color_names = []
-        for i in range(len(mag_columns)-1):
-        
-            color_array[:,i] = data[mag_columns[i]] - data[mag_columns[i+1]]
-            if (filter_order != None):
-                color_names.append(str(filter_order[i]) + "-" + str(filter_order[i+1]) )
-            else:
-                color_names.append(str(mag_columns[i]) + "-" + str(mag_columns[i+1]) )
-        
-        # convert to dataframe and return
-        return pd.DataFrame(color_array, columns=color_names)
-
-        
+                
         
     def _check_column_valid(self, column):
         """Check the column name or index is valid
@@ -311,3 +409,5 @@ def orderMagnitudeColumns(filter_order, map_filtname_to_colname):
         column_filter.append(map_filtname_to_colname[filt])
         
     return column_filter
+    
+    
