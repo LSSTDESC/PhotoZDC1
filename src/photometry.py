@@ -335,7 +335,7 @@ class ObsMag(CalcMag):
             return float('inf'), float('inf'), mag
         
         # get observed magnitude and error
-        obsmag, emag = self.errorModel.getObs(mag, filtObs, self.sed, size)
+        obsmag, emag = self.errorModel.getObs(mag, filtObs, size)
         
         return obsmag, emag, mag
         

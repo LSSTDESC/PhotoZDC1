@@ -56,7 +56,7 @@ class BaseErrorModel(object):
         pass
 
     @abc.abstractmethod
-    def getObs(self, mag, filtObs, sed, size):
+    def getObs(self, mag, filtObs, size, sed):
         """Return the observed magnitude and error """
         pass
         
@@ -86,7 +86,7 @@ class FractionalErrorModel(BaseErrorModel, PhotCalcs):
             self.minFlux = pars["minFlux"]
             
         
-    def getObs(self, mag, filtObs=None, sed=None, size=None):
+    def getObs(self, mag, filtObs=None, size=None, sed=None):
         # this should probs be a **args thing?
         
         if (mag==float('inf')):
@@ -262,7 +262,7 @@ class LSSTErrorModel(BaseErrorModel, PhotCalcs):
             self.minFlux = pars["minFlux"]
         
         
-    def getObs(self, mag, filtObs, sed=None, size=None):
+    def getObs(self, mag, filtObs, size=None, sed=None):
         # this should probs be a **args thing?
         
         if (mag==float('inf')):
@@ -290,7 +290,7 @@ class LSSTErrorModel(BaseErrorModel, PhotCalcs):
         """Return the flux, and photometric error in flux for filter filtObs"""
         
         # from LSST equations (no randomness)
-        errorMag = self.getMagError(mag, filtObs) 
+        errorMag = self.getMagError(mag, filtObs)
         
         # dFluxOverFlux = errorMag*(0.4*math.log(10.))
         # because 0.4*math.log(10.) = 0.921, errorMag ~= dFluxOverFlux
@@ -334,10 +334,10 @@ class LSSTErrorModel(BaseErrorModel, PhotCalcs):
         """
         sigmaRandSqSingleExp = (0.04 - gamma)*x + gamma*x*x
         sigmaRand = math.sqrt(sigmaRandSqSingleExp/nStackedObs) # actually = N/S
-        
+
         # following is the full expression not included in the Science Book:
         sigmaRand = 2.5*math.log10(1. + sigmaRand)  # ~= 1.0857*N/S (stops being good approx after N/S>2
-        
+
         # The Science Book eqn is only valid for high signal to noise objects which is based upon the
         # approximation that sigmaRand ~= N/S
         

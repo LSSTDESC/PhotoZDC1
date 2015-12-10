@@ -39,12 +39,12 @@ for i in range(nz):
     z = i*0.01
 
     start_time = time.time()
-    cython_result = calcMagCython.getMag("LSSTg", z, ("LSSTr", -20.))
+    cython_result = calcMagCython.getMag("LSST_g", z, ("LSST_r", -20.))
     end_time = time.time()
     cython_time = end_time - start_time
 
     start_time = time.time()
-    python_result = calcMagPython.getMag("LSSTg", z, ("LSSTr", -20.))
+    python_result = calcMagPython.getMag("LSST_g", z, ("LSST_r", -20.))
     end_time = time.time()
     python_time = end_time - start_time
     

@@ -41,7 +41,7 @@ class ReadCosmoSim(object):
             self._read_fits(file_to_read, nhdu)
         else:
             self._filetype = "TEXT"
-            self._read_text(file_to_read)
+            self._read_text(file_to_read, delimiter, index)
 
 
     def _read_fits(self, file_to_read, nhdu=1):
@@ -76,10 +76,15 @@ class ReadCosmoSim(object):
            @param delimiter      delimiter in text file
            @param index          column to use as row index (False=none)
         """
-        self._data = pd.read_csv(file_to_read, delimiter=delimiter, index_col=index) 
+        self._data = pd.read_csv(file_to_read, delimiter=delimiter, index_col=index)  
         #np.genfromtxt(file_to_read, dtype='float', names=True) # this is WAY slower
         self._col_names = self._data.columns
 
+
+    ### Print method
+    def head(self):
+        print self._data.head()
+        
 
     ### Getter methods
         
@@ -192,10 +197,13 @@ class ReadCosmoSim(object):
         
     def group_by_color(self, column1, column2, bins):
         """Return a dataframe grouped into bins based upon a "color" (difference between two columns, doesn't
-           technicall HAVE to be a color)
+           technically HAVE to be a color)
            
-           @param column     column name (str) or index (int)
-           @param bins       bin edges to be used to group the data in column
+           if the color = magX - magY then column1 == magX and column2 == magY
+           
+           @param column1    column name (str) or index (int) of bluer magnitude
+           @param column2    column name (str) or index (int) of redder magnitude
+           @param bins       bin edges to be used to group the data in (column
         """ 
         self._check_column_valid(column1)
         self._check_column_valid(column2)
