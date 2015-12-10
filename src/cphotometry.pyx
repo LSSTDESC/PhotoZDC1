@@ -208,7 +208,6 @@ cdef class PhotCalcs: #(object):
         return -2.5*log10( 1./(1.+z) * (int1*int2)/(int3*int4) )
     
        
-    ## @todo WRITE COMPUTE COLOR
     def computeColor(self, filtX, filtY, z):
         """Compute color (flux in filter X - filter Y) of SED at redshift z, return color in magnitudes
         
@@ -389,7 +388,7 @@ class CalcMag(PhotCalcs):
         # k-correction from rest-frame bad filtRF to observed-frame band
         # this method takes ~all the time of simulating a magnitude (~0.2s/gal)
         kc = self.kCorrectionXY(filtObs, filtRF, z)
-        
+         
         
         # luminosity distance
         self.cosmoModel.setEmissionRedShift(z)
@@ -421,8 +420,8 @@ class ObsMag(CalcMag):
     """
 
     def __init__(self, sed, filterDict, cosmoModel, errorModel):
-    
-        CalcMag.__init__(self, sed, filterDict, cosmoModel)
+        #CalcMag.__init__(self, sed, filterDict, cosmoModel)
+        self.cosmoModel = cosmoModel
         self.errorModel = errorModel
         
         
@@ -436,6 +435,7 @@ class ObsMag(CalcMag):
         str_msg += "\n  Error model: \n"
         str_msg += "  " + str(self.errorModel)
         return str_msg
+        
         
     def simulateObservation(self, filtObs, z, absMag, size=-1.):
         """Simulate observed magnitude in filter filtObs for a galaxy at redshift z and with absolute 
@@ -457,7 +457,7 @@ class ObsMag(CalcMag):
             return float('inf'), float('inf'), mag
         
         # get observed magnitude and error
-        obsmag, emag = self.errorModel.getObs(mag, filtObs, self.sed, size)
+        obsmag, emag = self.errorModel.getObs(mag, filtObs, size)
         
         return obsmag, emag, mag
         
