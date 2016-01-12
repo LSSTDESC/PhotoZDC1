@@ -129,7 +129,7 @@ class PhotCalcs(object):
         return -2.5*math.log10( 1./(1.+z) * (int1*int2)/(int3*int4) )
     
        
-    def computeColor(self, filtX, filtY, z):
+    def computeColor(self, filtX, filtY, z=0):
         """Compute color (flux in filter X - filter Y) of SED at redshift z, return color in magnitudes
         
            @param filtX   lower wavelength filter
@@ -158,6 +158,10 @@ class PhotCalcs(object):
         int4 = integ.quad(self._integrand2, aY, bY, args=(filtY))[0]
         zp = -2.5*math.log10(int4/int3)
         
+        if (int1==0. or int2==0.):
+            # zero observed flux in either filter so color should be infinite
+            return float("inf")
+            
         return -2.5*math.log10(int1/int2) + zp
     
     
