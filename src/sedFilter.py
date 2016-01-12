@@ -176,7 +176,7 @@ class Filter(object):
         if (len(np.where(transmission<0.)[0])>0):
             raise ValueError("ERROR! cannot have negative transmission")
            
-        if (len(np.where(transmission>1.)[0])>0):
+        if (len(np.where(transmission>1.000001)[0])>0):
             raise ValueError("ERROR! cannot have transmission > 1") 
 
         # filter is now represeted as an interpolation object (linear)
@@ -486,6 +486,10 @@ class MakeBandpass(object):
                 print "ARGEHHH max transmission of", component , np.max(transmission_data[:,1])
             trans = interp.InterpolatedUnivariateSpline(transmission_data[:,0], transmission_data[:,1], k=1)
             self.trans *= trans(self.wavelen)
+            
+            # set to zero all negative transmissions
+            self.trans[np.where(self.trans<0)] = 0.
+            
             #if (np.max(self.trans)>1.):
             #    print "ARGEHHH"
             
