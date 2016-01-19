@@ -18,30 +18,109 @@
 """
 
 from sklearn.cluster import KMeans
+from sklearn.decomposition import PCA as sklPCA
+from sklearn.gaussian_process import GaussianProcess
 import numpy as np
 import pandas as pd
 import time
 
 import photometry as phot
+import sedFilter as sedFilter
+
+
+def get_sed_array(sedDict, filterDict, color_file, minWavelen=2999., maxWavelen=12000., nWavelen=10000):
+    """Return array of SEDs on same wavelength grid
+    
+       @param sedDict       dictionary of SEDs
+       @param filterDict    dictionary of filters
+       @param color_file    file to save SED colors to or read colors from (if exists)
+       @param minWavelen    minimum wavelength of wavelength grid
+       @param maxWavelen    maximum wavelength of wavelength grid
+       @param nWavelen      number of points in wavelength grid
+       
+    
+    """
+    
+    # sort based upon effective wavelength
+    filter_order = sedFilter.orderFiltersByLamEff(filterDict)
+    
+    
+    # check if file exists and need to calculate colors
+    isFileExist = os.path.isfile(color_file)
+    if (isFileExist):
+        print "\nColors already computed"
+    else:
+        print "\nComputing colors ... "
+
+
+    # loop over each SED
+    for ised, (sedname, spec) in enumerate(sedDict.items()):
+    
+        
+        print "On SED", ised+1 ,"of", nSED, sedname
+        sednames.append(sedname)
+    
+        # re-grid SEDs onto same wavelengths
+        waveLen, fl = spec.getSedData(minWavelen, maxWavelen, nWavelen)
+        
+        
+        # normalise so they sum to 1
+        norm = np.sum(fl)
+        spectra.append(fl/norm)
+        
+        
+        # calculate or read colors
+        cs = []
+        if (isFileExist):
+        
+            # reading colors
+            colors_in_file = np.loadtxt(color_file)
+            cs = colors_in_file[ised,:]
+    
+        else:
+        
+            # calculating colors
+            spec = sedFilter.SED(waveLen, fl/norm)
+            pcalcs = phot.PhotCalcs(spec, filterDict)
+    
+            # in each filter
+            for i in range(len(filterList)-1):
+                color = pcalcs.computeColor(filterList[i], filterList[i+1])
+                if (color == float('inf')):
+                    color = 99.
+                cs.append(color)
+        
+        # store colors for this SED
+        colors.append(cs)
+        
+    
+    # conver to np arrays for ease
+    spectra = np.array(spectra)
+    colors = np.array(colors)
+    
+    
+    # if had to calculate, save colors to file to re-use
+    if (not isFileExist):
+        print "Saving colors to file for future use"
+        np.savetxt(color_file, colors)
+
+
+    return spectra, colors
 
 
 def get_sed_colors(sedDict, filterDict):
-    """Calculate the colors for all the SEDs in sedDict given the filters in filterDict
+    """Calculate the colors for all the SEDs in sedDict given the filters in filterDict, return as pandas
+       data frame
     
+       @param sedDict       dictionary of SEDs
+       @param filterDict    dictionary of filters
     """
     
     ncolors = len(filterDict) - 1
     nseds = len(sedDict)
-    
-    # process to get filter order and color names
-    filter_order = []
-    filter_effWave = []
-    for filtname, filt in filterDict.items():
-        filter_order.append(filtname)
-        filter_effWave.append(filt.getFilterEffectiveWL())
-        
+
     # sort based upon effective wavelength
-    filter_order = [name for (lam,name) in sorted(zip(filter_effWave, filter_order))]
+    filter_order = sedFilter.orderFiltersByLamEff(filterDict)
     
     # get names of colors
     color_names = []
@@ -72,6 +151,71 @@ def get_sed_colors(sedDict, filterDict):
     # convert to dataframe and return
     return pd.DataFrame(sed_colors, columns=color_names, index=sed_names)
 
+
+class SEDGenerator(object):
+
+    def __init__(self, waveLen, spectra, colors, ncomp):
+        """
+        
+        """    
+        self._ncomp = ncomp
+        self._waveLen = waveLen
+        self._spectra = spectra
+        self._colors = colors
+        
+        self.doPCA()
+        self.trainGP()
+        
+    
+    def doPCA(self):
+        """
+        """
+    
+        specPCA = sklPCA(self._ncomp)
+        specPCA.fit(self._spectra)
+        self._meanSpec = specPCA.mean_
+        self._eigenspectra = specPCA.components_
+        self._eigenvalue_coeffs = np.array(specPCA.transform(self._spectra))
+        
+        
+    def trainGP(self):
+        """
+        """
+        self._gp = GaussianProcess(corr = 'cubic', theta0 = 0.2)
+
+        # BK note:
+        # Make sure we only include unique color values
+        # Used method for taking unique rows in array found here:
+        # http://stackoverflow.com/questions/16970982/find-unique-rows-in-numpy-array
+        data = self._colors
+        find_unique = np.ascontiguousarray(data).view(np.dtype((np.void, data.dtype.itemsize*data.shape[1])))
+        unique_idx = np.unique(find_unique, return_index=True)[1]
+        print "Number of unique colors", len(unique_idx)
+
+        # Train and predict eigenvalues for this color set
+        self._gp.fit(self._colors[unique_idx], self._eigenvalue_coeffs[unique_idx, :self.ncomp])
+        
+        
+    def generateSpectrum(self, colors):
+        """
+        
+        """
+        eigenvals_generated = self._gp.predict(colors)
+
+
+        ### Reconstruct SED
+        spec_rec = np.dot(eigenvals_generated, self._eigenspectra) + self._meanSpec
+        norm = np.sum(spec_rec)
+        spec_rec /= norm
+        
+        # Protect against zero fluxes
+        spec_rec[np.where(spec_rec<0)] = 0.
+        
+        # Recreate SED object
+        sed_rec = sedFilter.SED(self._waveLen, spec_rec)
+        
+        return sed_rec
+        
 
 def check_color_match(galaxy_colors, sed_colors, nstd=3.):
     """Check typical distance between galaxy colors and colors of the SED set
