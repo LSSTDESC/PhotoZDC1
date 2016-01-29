@@ -519,14 +519,14 @@ def createSedDict(listOfSedsFile, pathToFile="../sed_data/"):
        Dictionary value is a Filter object: the filter transmission data read from file 
        
     """
-    
     f = open(pathToFile + "/" + listOfSedsFile)
         
     sedDict = {}
     for line in f:
            
         sedData = np.loadtxt(pathToFile + "/" + line.rstrip())
-        sedName = line.rstrip().split('.')[0]
+        # sedName = line.rstrip().split('.')[0] -> only works if single '.' in filename delineating extension
+        sedName = "_".join(line.rstrip().split('.')[:-1])
         print "Adding SED", sedName ,"to dictionary"
         
         sed = SED(sedData[:,0], sedData[:,1])
