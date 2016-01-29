@@ -153,9 +153,9 @@ class PcaGaussianProc(object):
 ##### Helper functions
 
 
-def get_sed_array(sedDict, filterDict, color_file, minWavelen=2999., maxWavelen=12000., nWavelen=10000):
-    """Return array of SEDs on same wavelength grid (along with colors as defined by filterDict and the 
-       wavelength grid)
+def get_sed_array(sedDict, filterDict=None, color_file=None, 
+                  minWavelen=2999., maxWavelen=12000., nWavelen=10000):
+    """Return array of SEDs on same wavelength grid (optionally along with colors as defined by filterDict)
     
        @param sedDict       dictionary of SEDs
        @param filterDict    dictionary of filters
@@ -165,17 +165,24 @@ def get_sed_array(sedDict, filterDict, color_file, minWavelen=2999., maxWavelen=
        @param nWavelen      number of points in wavelength grid
        
     """
+    doColors = True
+    if (filterDict==None or color_file==None):
+        doColors = False
     
-    # sort based upon effective wavelength
-    filter_order = sedFilter.orderFiltersByLamEff(filterDict)
+    
+    isFileExist = False
+    if doColors:
+    
+        # sort based upon effective wavelength
+        filter_order = sedFilter.orderFiltersByLamEff(filterDict)
     
     
-    # check if file exists and need to calculate colors
-    isFileExist = os.path.isfile(color_file)
-    if (isFileExist):
-        print "\nColors already computed"
-    else:
-        print "\nComputing colors ... "
+        # check if file exists and need to calculate colors
+        isFileExist = os.path.isfile(color_file)
+        if (isFileExist):
+            print "\nColors already computed"
+        else:
+            print "\nComputing colors ... "
 
 
     # loop over each SED
@@ -196,29 +203,30 @@ def get_sed_array(sedDict, filterDict, color_file, minWavelen=2999., maxWavelen=
         spectra.append(fl/norm)
         
         
-        # calculate or read colors
-        cs = []
-        if (isFileExist):
+        if doColors: 
+            # calculate or read colors
+            cs = []
+            if (isFileExist):
         
-            # reading colors
-            colors_in_file = np.loadtxt(color_file)
-            cs = colors_in_file[ised,:]
+                # reading colors
+                colors_in_file = np.loadtxt(color_file)
+                cs = colors_in_file[ised,:]
     
-        else:
+            else:
         
-            # calculating colors
-            spec = sedFilter.SED(waveLen, fl/norm)
-            pcalcs = phot.PhotCalcs(spec, filterDict)
+                # calculating colors
+                spec = sedFilter.SED(waveLen, fl/norm)
+                pcalcs = phot.PhotCalcs(spec, filterDict)
     
-            # in each filter
-            for i in range(len(filterDict)-1):
-                color = pcalcs.computeColor(filter_order[i], filter_order[i+1])
-                if (color == float('inf')):
-                    color = 99.
-                cs.append(color)
+                # in each filter
+                for i in range(len(filterDict)-1):
+                    color = pcalcs.computeColor(filter_order[i], filter_order[i+1])
+                    if (color == float('inf')):
+                        color = 99.
+                    cs.append(color)
         
-        # store colors for this SED
-        colors.append(cs)
+            # store colors for this SED
+            colors.append(cs)
         
     
     # conver to np arrays for ease
@@ -227,12 +235,15 @@ def get_sed_array(sedDict, filterDict, color_file, minWavelen=2999., maxWavelen=
     
     
     # if had to calculate, save colors to file to re-use
-    if (not isFileExist):
+    if (not isFileExist and doColors):
         print "Saving colors to file for future use"
         np.savetxt(color_file, colors)
 
-    return waveLen, spectra, colors
-
+    if doColors:
+        return waveLen, spectra, colors
+    else:
+        return waveLen, spectra
+        
 
 def get_sed_colors(sedDict, filterDict):
     """Calculate the colors for all the SEDs in sedDict given the filters in filterDict, return as pandas
