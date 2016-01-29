@@ -6,7 +6,7 @@ import numpy as np
 import sedFilter
 
 
-TESTDATA_FILENAME = os.path.join(os.path.dirname(__file__), '../filter_data/LSSTi.res')
+TESTDATA_FILENAME = os.path.join(os.path.dirname(__file__), '../filter_data/LSST_i.res')
 
 class TestFilter(unittest.TestCase):
 
