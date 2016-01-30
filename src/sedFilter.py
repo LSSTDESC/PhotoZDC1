@@ -84,7 +84,7 @@ class SED(object):
            @param lam    wavelength in angstroms
            @param z      redshift of spectrum
         """
-        if (lam<0.):
+        if np.any(lam<0.):
             raise ValueError("ERROR! wavelength cannot be less than zero!")
         
         if (z<0.):
@@ -93,8 +93,8 @@ class SED(object):
         lamFrame = lam/(1.+z) # does nothing if z=0 (i.e. this is the rest-frame)
         flux = self.sed(lamFrame)
         
-        if (flux<0.):
-            flux = 0.
+        if np.any(flux<0.): #this is actually not neede
+            flux[flux<0.] = 0.
             #print "Warning: negative flux was interpolated, set to zero instead"
             
         # add igm here
@@ -113,18 +113,8 @@ class SED(object):
            @param nLam      number of points in wavelength grid
            @param z         redshift of spectrum
         """
-
-        dLam = (lamMax - lamMin)/(nLam - 1.)
-        wavelengths = []
-        fluxes = []
-        for i in xrange(nLam):
-        
-            lam = lamMin + i*dLam
-            flux = self.getFlux(lam, z)
-            
-            wavelengths.append(lam)
-            fluxes.append(flux)
-            
+        wavelengths = np.linspace(lamMin, lamMax, nLam)
+        fluxes = self.getFlux(wavelengths, z)
         return wavelengths, fluxes
         
 
@@ -168,15 +158,18 @@ class Filter(object):
         self.lamMin = waveLengths[0]
         self.lamMax = waveLengths[-1]
         self.nLam = len(waveLengths)    
+		#this could come handy if we need to defer the construction of the interpolator
+        self.wavelengths = waveLengths
+        self.transmission = transmission
         
         # check wavelength and transmission domains are valid
         if (self.lamMin<0.):
             raise ValueError("ERROR! wavelengths cannot be less than zero!")
             
-        if (len(np.where(transmission<0.)[0])>0):
+        if np.any(transmission<0.):
             raise ValueError("ERROR! cannot have negative transmission")
            
-        if (len(np.where(transmission>1.000001)[0])>0):
+        if np.any(transmission>1.000001): #why not just 1.?
             raise ValueError("ERROR! cannot have transmission > 1") 
 
         # filter is now represeted as an interpolation object (linear)
@@ -197,35 +190,22 @@ class Filter(object):
     def getTrans(self, lam):
         """Return transmission at wavelength lambda."""
         
-        if (lam<0.):
+        if np.any(lam<0.):
             raise ValueError("ERROR! wavelength cannot be less than zero!")
 
         trans = self.filt(lam)
         
         # protect against interpolation producing negative values
-        if (trans<0.):
-            trans = 0.
-            #print "Warning: negative transmission was interpolated, set to zero instead"
-        
+        trans[trans<0] = 0
         return trans
         
     
     def getFilterData(self):
-        """Return wavelength and transmisson data for filter (e.g. ready for plotting)
+        """Return wavelength and transmission data for filter (e.g. ready for plotting)
 
         """
-
-        dLam = (self.lamMax - self.lamMin)/(self.nLam - 1.)
-        wavelengths = []
-        trans = []
-        for i in xrange(self.nLam):
-        
-            lam = self.lamMin + i*dLam
-            t = self.getTrans(lam)
-            
-            wavelengths.append(lam)
-            trans.append(t)
-            
+        wavelengths = np.linspace(self.lamMin, self.lamMax, self.nLam)
+        trans = self.getTrans(wavelengths)
         return wavelengths, trans
         
     
@@ -237,7 +217,17 @@ class Filter(object):
         bot = integ.quad(self._integrand2, self.lamMin, self.lamMax)[0]
         lamEff = np.sqrt(top/bot)
         return lamEff
-        
+
+	#this version of the function runs ~300 times faster on my laptop.
+    def getFilterEffectiveWL_fast(self):
+        x = self.wavelengths
+        y = self.transmission
+        dlam=np.diff(x)
+        xmid=(x[:-1]+x[1:])/2.
+        ymid=(y[:-1]+y[1:])/2.
+        fmid = self.getTrans(xmid)
+        return np.sqrt((fmid*xmid*dlam).sum()/(fmid/xmid*dlam).sum())
+
         
     def returnFilterRange(self):
         """Return range of filter wavelengths"""
@@ -560,28 +550,13 @@ def createFilterDict(listOfFiltersFile, pathToFile="../filter_data/"):
 def getNames(filter_or_sed_dict):
     """Return unordered list of all filter names or SED names in the dictionary supplied 
     """
-    name_list = []
-    for key, value in filter_or_sed_dict.iteritems():
-        name_list.append(key)
-    
-    return name_list
-    
+    return filter_or_sed_dict.keys()
     
 def getFilterList(listOfFiltersFile, pathToFile="../filter_data/"):
     """Read file containing list of filters to read, place the filter names into a list
        Order filters listed in file is preserved                                                           
     """
-    
-    f = open(pathToFile + "/" + listOfFiltersFile)
-        
-    filterList = []
-    for line in f:
-
-        filtName = line.rstrip().split('.')[0]
-        filterList.append(filtName)
-           
-    return filterList
-       
+    return np.genfromtxt(os.path.join(pathToFile,listOfFilters),'str')
     
 def orderFiltersByLamEff(filterDict):
     """Order the filters in a dictionary by their effective wavelength. Returns list of str's of filter names
