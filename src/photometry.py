@@ -18,6 +18,7 @@
 """
 
 import scipy.integrate as integ
+import scipy.interpolate as interp
 import math
 import time
 
@@ -85,25 +86,33 @@ class PhotCalcs(object):
         aY, bY = self.filterDict[filtY].returnFilterRange()
         #print 'Integrating filter X between', aX ,'and', bX
         #print 'Integrating filter Y between', aY ,'and', bY
-    
+        lam = self.filterDict[filtX].wavelengths
+        res = self.sed.getFlux(lam, z)*self.filterDict[filtX].getTrans(lam)*lam
+        integrand = interp.InterpolatedUnivariateSpline(lam, res, k=1)
+        int1 = integ.quad(integrand, aX, bX)[0]
+
+        lam = self.filterDict[filtY].wavelengths
+        res = self.sed.getFlux(lam, 0)*self.filterDict[filtY].getTrans(lam)*lam
+        integrand = interp.InterpolatedUnivariateSpline(lam, res, k=1)
+        int3 = integ.quad(integrand, aY, bY)[0]
         #start_time = time.time()
         # integral of SED over observed-frame filter
         # int S(lam/(1+z))*X(lam)*lam dlam
-        int1 = integ.quad(self._integrand1, aX, bX, args=(z, filtX))[0]
+        #int1 = integ.quad(self._integrand1, aX, bX, args=(z, filtX))[0]
         # integral of SED over rest-frame filter
         # int S(lam)*Y(lam)*lam dlam
-        int3 = integ.quad(self._integrand1, aY, bY, args=(0., filtY))[0]
+        #int3 = integ.quad(self._integrand1, aY, bY, args=(0., filtY))[0]
         
         
         # don't perform these integrals if filter is the same
         if (filtX != filtY):
             # integral of rest-frame filter
             # int Y(lam)/lam dlam
-            int2 = integ.quad(self._integrand2, aY, bY, args=(filtY))[0]
-        
+            int2 = self.filterDict[filtY].integral2
+            
             # integral of observed-frame filter
             # int X(lam)/lam dlam
-            int4 = integ.quad(self._integrand2, aX, bX, args=(filtX))[0]
+            int4 =self.filterDict[filtX].integral2
             
             # check integrals of filters: these should *definitely* never be zero
             if (int2==0. or int4==0.):

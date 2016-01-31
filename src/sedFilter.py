@@ -93,7 +93,7 @@ class SED(object):
         lamFrame = lam/(1.+z) # does nothing if z=0 (i.e. this is the rest-frame)
         flux = self.sed(lamFrame)
         
-        if np.any(flux<0.): #this is actually not neede
+        if np.any(flux<0.): #this is actually not needed
             flux[flux<0.] = 0.
             #print "Warning: negative flux was interpolated, set to zero instead"
             
@@ -161,6 +161,11 @@ class Filter(object):
 		#this could come handy if we need to defer the construction of the interpolator
         self.wavelengths = waveLengths
         self.transmission = transmission
+        #cache these values for later reuse. Note that this will fail if the filter
+        #support is disconnected... need to build a safer interface?
+        self.integral1 = integ.trapz(transmission*waveLengths,waveLengths)
+        self.integral2 = integ.trapz(transmission/waveLengths,waveLengths)
+        self.effLambda = np.sqrt(self.integral1/self.integral2)
         
         # check wavelength and transmission domains are valid
         if (self.lamMin<0.):
@@ -220,14 +225,7 @@ class Filter(object):
 
 	#this version of the function runs ~300 times faster on my laptop.
     def getFilterEffectiveWL_fast(self):
-        x = self.wavelengths
-        y = self.transmission
-        dlam=np.diff(x)
-        xmid=(x[:-1]+x[1:])/2.
-        ymid=(y[:-1]+y[1:])/2.
-        fmid = self.getTrans(xmid)
-        return np.sqrt((fmid*xmid*dlam).sum()/(fmid/xmid*dlam).sum())
-
+        return self.effLambda
         
     def returnFilterRange(self):
         """Return range of filter wavelengths"""
