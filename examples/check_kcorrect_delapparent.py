@@ -22,7 +22,7 @@ filterDict = sedFilter.createFilterDict(listOfFilters, pathToFilters)
 
 
 # return the filter names
-filterList = sedFilter.getFilterList(listOfFilters, pathToFilters)
+filterList = sedFilter.orderFiltersByLamEff(filterDict)
 print 'Filter list = ', filterList
 nFilter = len(filterList)
 

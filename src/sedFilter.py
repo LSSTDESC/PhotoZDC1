@@ -10,13 +10,12 @@
   createSedDict:        Reads list of SEDs from a file, then write the data into a dictionary (of SED objects)
   createFilterDict:     Reads list of filters from a file, then writes their data into a dictionary 
                         (of Filter objects)
-  getFilterList:        Reads list of filters from a file and returns the name of each filter as a list
   orderFiltersByLamEff: Order the filters in a dictionary by their effective wavelength, return ordered list
                         of strings of their names
   
 
 """
-
+import os
 import scipy.interpolate as interp
 import scipy.integrate as integ
 import numpy as np
@@ -269,11 +268,13 @@ class MaskSEDs(object):
         # wavelength ranges containing common emission lines in angstroms
         self.el = np.loadtxt(emission_lines_file)
         
+        
+        
       
     def mask_SEDs(self):
         """Do SED masking """
         
-        for (sedname, sed), ised in zip(self.origSEDs.items(), xrange(self.nsed)):
+        for ised, (sedname, sed) in enumerate(self.origSEDs.items()):
         #for ised (sedname, sed) in enumerate(self.origSEDs.items()):
 
             # constant to divide by so SED is normalised to 1 at wlnorm
@@ -545,16 +546,20 @@ def createFilterDict(listOfFiltersFile, pathToFile="../filter_data/"):
            
     return filterDict
     
+    
 def getNames(filter_or_sed_dict):
     """Return unordered list of all filter names or SED names in the dictionary supplied 
     """
     return filter_or_sed_dict.keys()
     
-def getFilterList(listOfFiltersFile, pathToFile="../filter_data/"):
-    """Read file containing list of filters to read, place the filter names into a list
-       Order filters listed in file is preserved                                                           
-    """
-    return np.genfromtxt(os.path.join(pathToFile,listOfFilters),'str')
+
+# Retire this function, use the below 'orderFiltersByLamEff' instead
+#def getFilterList(listOfFiltersFile, pathToFile="../filter_data/"):
+#    """Read file containing list of filters to read, place the filter names into a list
+#       Order filters listed in file is preserved                                                           
+#    """
+#    return np.genfromtxt(os.path.join(pathToFile,listOfFiltersFile),'str')
+    
     
 def orderFiltersByLamEff(filterDict):
     """Order the filters in a dictionary by their effective wavelength. Returns list of str's of filter names

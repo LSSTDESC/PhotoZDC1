@@ -76,8 +76,8 @@ def main(argv):
 
     ### Filter set to calculate colors
     pathToFilters = '/mnt/drive2/repos/PhotoZDC1/filter_data/'
-    filterList = sedFilter.getFilterList(listOfFilters, pathToFilters)
     filterDict = sedFilter.createFilterDict(listOfFilters, pathToFilters)
+    filterList = sedFilter.orderFiltersByLamEff(filterDict)
     nFilters = len(filterList)
     print "Number of filters =", nFilters
 

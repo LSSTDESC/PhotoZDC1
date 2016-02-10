@@ -15,7 +15,7 @@ TEST_SED = sedFilter.SED(seddata[:,0], seddata[:,1])
 listOfFilters = 'LSST.filters'
 pathToFilters = '../filter_data'
 TEST_FILTERDICT = sedFilter.createFilterDict(listOfFilters, pathToFilters)
-FILTERLIST = sedFilter.getFilterList(listOfFilters, pathToFilters)
+FILTERLIST = sedFilter.orderFiltersByLamEff(TEST_FILTERDICT)
 
 # List of SEDs for testing
 SEDLIST = []
