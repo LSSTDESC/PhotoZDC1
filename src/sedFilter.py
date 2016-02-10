@@ -213,17 +213,17 @@ class Filter(object):
         return wavelengths, trans
         
     
-    def getFilterEffectiveWL(self):
-        """Calculate effective wavelength of the filter"""
-        # should this be just int F(lam)*lam dlam / int F(lam) dlam ????
-        
-        top = integ.quad(self._integrand1, self.lamMin, self.lamMax)[0]
-        bot = integ.quad(self._integrand2, self.lamMin, self.lamMax)[0]
-        lamEff = np.sqrt(top/bot)
-        return lamEff
+    #def getFilterEffectiveWL_old(self):
+    #    """Calculate effective wavelength of the filter"""
+    #    # should this be just int F(lam)*lam dlam / int F(lam) dlam ????
+    #    
+    #    top = integ.quad(self._integrand1, self.lamMin, self.lamMax)[0]
+    #    bot = integ.quad(self._integrand2, self.lamMin, self.lamMax)[0]
+    #    lamEff = np.sqrt(top/bot)
+    #    return lamEff
 
 	#this version of the function runs ~300 times faster on my laptop.
-    def getFilterEffectiveWL_fast(self):
+    def getFilterEffectiveWL(self):
         return self.effLambda
         
     def returnFilterRange(self):
