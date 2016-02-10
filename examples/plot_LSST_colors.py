@@ -19,7 +19,7 @@ filterDict = sedFilter.createFilterDict(listOfFilters, pathToFilters)
 
 
 # return the filter names
-filterList = sedFilter.getFilterList(listOfFilters, pathToFilters)
+filterList = sedFilter.orderFiltersByLamEff(filterDict)
 print 'Filter list = ', filterList
 nFilter = len(filterList)
 
@@ -58,13 +58,13 @@ for i in xrange(nz):
     z = zmin + i*dz
     zdata[i] = z
    
-    g_minus_r[i] = p.computeColor("LSSTg", "LSSTr", z)
-    r_minus_i[i] = p.computeColor("LSSTr", "LSSTi", z)
+    g_minus_r[i] = p.computeColor("LSST_g", "LSST_r", z)
+    r_minus_i[i] = p.computeColor("LSST_r", "LSST_i", z)
     
 
-# make equivalent plot to figure 9 in de Lapparent et al
 
 fig = plt.figure(figsize=(20,10))
+fig.suptitle('Elliptical galaxy', fontsize=24)
 
 # plot of g-r vs z
 ax = fig.add_subplot(131)

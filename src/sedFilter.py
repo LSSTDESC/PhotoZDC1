@@ -10,13 +10,12 @@
   createSedDict:        Reads list of SEDs from a file, then write the data into a dictionary (of SED objects)
   createFilterDict:     Reads list of filters from a file, then writes their data into a dictionary 
                         (of Filter objects)
-  getFilterList:        Reads list of filters from a file and returns the name of each filter as a list
   orderFiltersByLamEff: Order the filters in a dictionary by their effective wavelength, return ordered list
                         of strings of their names
   
 
 """
-
+import os
 import scipy.interpolate as interp
 import scipy.integrate as integ
 import numpy as np
@@ -84,7 +83,7 @@ class SED(object):
            @param lam    wavelength in angstroms
            @param z      redshift of spectrum
         """
-        if (lam<0.):
+        if np.any(lam<0.):
             raise ValueError("ERROR! wavelength cannot be less than zero!")
         
         if (z<0.):
@@ -93,8 +92,8 @@ class SED(object):
         lamFrame = lam/(1.+z) # does nothing if z=0 (i.e. this is the rest-frame)
         flux = self.sed(lamFrame)
         
-        if (flux<0.):
-            flux = 0.
+        if np.any(flux<0.): #this is actually not needed
+            flux[flux<0.] = 0.
             #print "Warning: negative flux was interpolated, set to zero instead"
             
         # add igm here
@@ -113,18 +112,8 @@ class SED(object):
            @param nLam      number of points in wavelength grid
            @param z         redshift of spectrum
         """
-
-        dLam = (lamMax - lamMin)/(nLam - 1.)
-        wavelengths = []
-        fluxes = []
-        for i in xrange(nLam):
-        
-            lam = lamMin + i*dLam
-            flux = self.getFlux(lam, z)
-            
-            wavelengths.append(lam)
-            fluxes.append(flux)
-            
+        wavelengths = np.linspace(lamMin, lamMax, nLam)
+        fluxes = self.getFlux(wavelengths, z)
         return wavelengths, fluxes
         
 
@@ -168,15 +157,23 @@ class Filter(object):
         self.lamMin = waveLengths[0]
         self.lamMax = waveLengths[-1]
         self.nLam = len(waveLengths)    
+		#this could come handy if we need to defer the construction of the interpolator
+        self.wavelengths = waveLengths
+        self.transmission = transmission
+        #cache these values for later reuse. Note that this will fail if the filter
+        #support is disconnected... need to build a safer interface?
+        self.integral1 = integ.trapz(transmission*waveLengths,waveLengths)
+        self.integral2 = integ.trapz(transmission/waveLengths,waveLengths)
+        self.effLambda = np.sqrt(self.integral1/self.integral2)
         
         # check wavelength and transmission domains are valid
         if (self.lamMin<0.):
             raise ValueError("ERROR! wavelengths cannot be less than zero!")
             
-        if (len(np.where(transmission<0.)[0])>0):
+        if np.any(transmission<0.):
             raise ValueError("ERROR! cannot have negative transmission")
            
-        if (len(np.where(transmission>1.000001)[0])>0):
+        if np.any(transmission>1.000001): #why not just 1.?
             raise ValueError("ERROR! cannot have transmission > 1") 
 
         # filter is now represeted as an interpolation object (linear)
@@ -197,35 +194,22 @@ class Filter(object):
     def getTrans(self, lam):
         """Return transmission at wavelength lambda."""
         
-        if (lam<0.):
+        if np.any(lam<0.):
             raise ValueError("ERROR! wavelength cannot be less than zero!")
 
         trans = self.filt(lam)
         
         # protect against interpolation producing negative values
-        if (trans<0.):
-            trans = 0.
-            #print "Warning: negative transmission was interpolated, set to zero instead"
-        
+        trans[trans<0] = 0
         return trans
         
     
     def getFilterData(self):
-        """Return wavelength and transmisson data for filter (e.g. ready for plotting)
+        """Return wavelength and transmission data for filter (e.g. ready for plotting)
 
         """
-
-        dLam = (self.lamMax - self.lamMin)/(self.nLam - 1.)
-        wavelengths = []
-        trans = []
-        for i in xrange(self.nLam):
-        
-            lam = self.lamMin + i*dLam
-            t = self.getTrans(lam)
-            
-            wavelengths.append(lam)
-            trans.append(t)
-            
+        wavelengths = np.linspace(self.lamMin, self.lamMax, self.nLam)
+        trans = self.getTrans(wavelengths)
         return wavelengths, trans
         
     
@@ -237,7 +221,10 @@ class Filter(object):
         bot = integ.quad(self._integrand2, self.lamMin, self.lamMax)[0]
         lamEff = np.sqrt(top/bot)
         return lamEff
-        
+
+	#this version of the function runs ~300 times faster on my laptop.
+    def getFilterEffectiveWL_fast(self):
+        return self.effLambda
         
     def returnFilterRange(self):
         """Return range of filter wavelengths"""
@@ -281,11 +268,13 @@ class MaskSEDs(object):
         # wavelength ranges containing common emission lines in angstroms
         self.el = np.loadtxt(emission_lines_file)
         
+        
+        
       
     def mask_SEDs(self):
         """Do SED masking """
         
-        for (sedname, sed), ised in zip(self.origSEDs.items(), xrange(self.nsed)):
+        for ised, (sedname, sed) in enumerate(self.origSEDs.items()):
         #for ised (sedname, sed) in enumerate(self.origSEDs.items()):
 
             # constant to divide by so SED is normalised to 1 at wlnorm
@@ -588,28 +577,16 @@ def plotSedFilter(dataDict, ax, isSED=True, lamMin=2500., lamMax=12000., nLam=50
 def getNames(filter_or_sed_dict):
     """Return unordered list of all filter names or SED names in the dictionary supplied 
     """
-    name_list = []
-    for key, value in filter_or_sed_dict.iteritems():
-        name_list.append(key)
+    return filter_or_sed_dict.keys()
     
-    return name_list
-    
-    
-def getFilterList(listOfFiltersFile, pathToFile="../filter_data/"):
-    """Read file containing list of filters to read, place the filter names into a list
-       Order filters listed in file is preserved                                                           
-    """
-    
-    f = open(pathToFile + "/" + listOfFiltersFile)
-        
-    filterList = []
-    for line in f:
 
-        filtName = line.rstrip().split('.')[0]
-        filterList.append(filtName)
-           
-    return filterList
-       
+# Retire this function, use the below 'orderFiltersByLamEff' instead
+#def getFilterList(listOfFiltersFile, pathToFile="../filter_data/"):
+#    """Read file containing list of filters to read, place the filter names into a list
+#       Order filters listed in file is preserved                                                           
+#    """
+#    return np.genfromtxt(os.path.join(pathToFile,listOfFiltersFile),'str')
+    
     
 def orderFiltersByLamEff(filterDict):
     """Order the filters in a dictionary by their effective wavelength. Returns list of str's of filter names

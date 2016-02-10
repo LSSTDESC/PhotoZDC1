@@ -8,7 +8,7 @@ import numpy as np
 
 
 # list of LSST filters
-filterList = ["LSSTu", "LSSTg", "LSSTr", "LSSTi", "LSSTz", "LSSTy"]
+filterList = ["LSST_u", "LSST_g", "LSST_r", "LSST_i", "LSST_z", "LSST_y"]
 nFilter = len(filterList)
 
 
