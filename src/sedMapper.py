@@ -54,16 +54,18 @@ class PcaGaussianProc(object):
         """ 
         # first turn SED set into a set of spectra on a common wavelength grid
         # and calculate their colors within supplied filter set
-        waveLen, spectra, colors = get_sed_array(sedDict, filterDict, color_file, minWavelen, maxWavelen,
-                                                 nWavelen)
+        waveLen, spectra, colors = get_sed_array(sedDict, minWavelen, maxWavelen, nWavelen, 
+                                                 filterDict, color_file)
         
         self._waveLen = waveLen
         self._spectra = spectra
         self._colors = colors
          
-        # perform PCA and train GP
+        # parameters of GP covariance function
         self._corr_type = corr_type
         self._theta0 = theta0
+        
+        # perform PCA and train GP
         self._doPCA(ncomp, self._spectra)
         self._trainGP(self._colors)
         
@@ -138,7 +140,7 @@ class PcaGaussianProc(object):
         data = colors
         find_unique = np.ascontiguousarray(data).view(np.dtype((np.void, data.dtype.itemsize*data.shape[1])))
         unique_idx = np.unique(find_unique, return_index=True)[1]
-        print "Number of unique colors", len(unique_idx), "total number of colors =", len(colors)
+        print "Number of unique colors in SED set", len(unique_idx), "total number of SEDs =", len(colors)
 
         # Train and predict eigenvalues for this color set
         self._gp.fit(colors[unique_idx], self.eigenvalue_coeffs[unique_idx, :])
@@ -153,18 +155,22 @@ class PcaGaussianProc(object):
 ##### Helper functions
 
 
-def get_sed_array(sedDict, filterDict=None, color_file=None, 
-                  minWavelen=2999., maxWavelen=12000., nWavelen=10000):
+def get_sed_array(sedDict, minWavelen=2999., maxWavelen=12000., nWavelen=10000, 
+                  filterDict=None, color_file=None):
     """Return array of SEDs on same wavelength grid (optionally along with colors as defined by filterDict)
     
+       If computing colors, first orders filters by effective wavelength, then a color is:
+       color_{i, i+1} = mag_filter_i - mag_filter_i+1
+    
        @param sedDict       dictionary of SEDs
-       @param filterDict    dictionary of filters
-       @param color_file    file to save SED colors to or read colors from (if exists)
        @param minWavelen    minimum wavelength of wavelength grid
        @param maxWavelen    maximum wavelength of wavelength grid
        @param nWavelen      number of points in wavelength grid
+       @param filterDict    dictionary of filters
+       @param color_file    file to save SED colors to or read colors from (if exists)
        
     """
+    
     doColors = True
     if (filterDict==None or color_file==None):
         doColors = False
@@ -180,10 +186,10 @@ def get_sed_array(sedDict, filterDict=None, color_file=None,
         # check if file exists and need to calculate colors
         isFileExist = os.path.isfile(color_file)
         if (isFileExist):
-            print "\nColors already computed"
+            print "\nColors already computed,",
         else:
-            print "\nComputing colors ... "
-
+            print "\nComputing colors,",
+    print "placing SEDs in array ..." 
 
     # loop over each SED
     nSED = len(sedDict)
