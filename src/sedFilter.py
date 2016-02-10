@@ -557,6 +557,34 @@ def createFilterDict(listOfFiltersFile, pathToFile="../filter_data/"):
            
     return filterDict
     
+    
+def plotSedFilter(dataDict, ax, isSED=True, lamMin=2500., lamMax=12000., nLam=5000):
+    """Plots the data in dataDict on matplotlib axes given by ax"""
+    
+    lamNorm = 5500.
+    
+    for dataname, data in dataDict.items():
+    
+        ### Get array version of data back
+        if (isSED):
+            wl, data_array = data.getSedData(lamMin, lamMax, nLam)
+            
+            inorm = min(range(len(wl)), key=lambda i: abs(wl[i]-lamNorm))
+            data_array/=data_array[inorm]
+        else:
+            wl, data_array = data.getFilterData()
+    
+        ax.plot(wl, data_array, color='red')
+
+        ax.set_xlabel('wavelength (Angstroms)', fontsize=24)
+        if (isSED):
+            ax.set_ylabel('flux (f$_\lambda$)', fontsize=24)
+            ax.set_yscale('log')
+        else:
+            ax.set_ylabel('transmission', fontsize=24)
+        
+        
+        
 def getNames(filter_or_sed_dict):
     """Return unordered list of all filter names or SED names in the dictionary supplied 
     """
