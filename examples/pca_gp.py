@@ -97,6 +97,7 @@ def main(argv):
     colors = pcaGP._colors
     spectra = pcaGP._spectra
     waveLen = pcaGP._waveLen
+    meanSpectrum = pcaGP.meanSpec
     projected_all = pcaGP.eigenvalue_coeffs
     print "... done\n"
 
@@ -128,7 +129,7 @@ def main(argv):
         
             delta_mag[i,j] = cs-colors[i,j]
             if (j<6):
-                print delta_mag[i,j],
+                print "(", cs, colors[i,j], delta_mag[i,j],")"
             if (abs(delta_mag[i,j])<0.005):
                 cnt+=1
             if (abs(delta_mag[i,j])>0.05):
@@ -145,6 +146,7 @@ def main(argv):
         ax = fig.add_subplot(111)
         ax.plot(waveLen, spectra[i,:], color='blue', label='true')
         ax.plot(wl, spec_rec, color='red', linestyle='dashed', label='estimated')
+        ax.plot(waveLen, meanSpectrum, color='black', linestyle='dotted', label='mean')
         ax.set_xlabel('wavelength (angstroms)', fontsize=24)
         ax.set_ylabel('flux', fontsize=24)
         handles, labels = ax.get_legend_handles_labels()
@@ -156,7 +158,7 @@ def main(argv):
         y1, y2 = ax.get_ylim()
         ax.text(9000, 0.9*y2, annotate, fontsize=12)
         plt.savefig(save_stem + '_' + 'bad_' + sedname + '.png')
-        # plt.show(block=True)
+        #plt.show(block=True)
         
         
         ### Performance check
@@ -188,6 +190,7 @@ def main(argv):
     ax.hist(perf,20, normed=False, histtype='stepfilled')
     ax.set_xlabel('number of colors better than sys error', fontsize=24)
     plt.savefig(save_stem + '_' + 'perf.png')
+    plt.show(block=True)
     
 
     ### Histogram of delta-mags
