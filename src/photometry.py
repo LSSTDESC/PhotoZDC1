@@ -159,31 +159,31 @@ class PhotCalcs(object):
         aX, bX = self.filterDict[filtX].returnFilterRange()
         aY, bY = self.filterDict[filtY].returnFilterRange()
         
-        #int1 = integ.quad(self._integrand1, aX, bX, args=(z, filtX))[0]
-        #int2 = integ.quad(self._integrand1, aY, bY, args=(z, filtY))[0]
         
+        # int S(lam_obs)*X(lam)*lam dlam
         lam = self.filterDict[filtX].wavelengths
         res = self.sed.getFlux(lam, z)*self.filterDict[filtX].getTrans(lam)*lam
         integrand = interp.InterpolatedUnivariateSpline(lam, res, k=1)
         int1 = integ.quad(integrand, aX, bX)[0]
         
         
+        # int S(lam_obs)*Y(lam)*lam dlam
         lam = self.filterDict[filtY].wavelengths
         res = self.sed.getFlux(lam, z)*self.filterDict[filtY].getTrans(lam)*lam
         integrand = interp.InterpolatedUnivariateSpline(lam, res, k=1)
         int2 = integ.quad(integrand, aY, bY)[0]
         
-        # Do we need this zero-point term?
-        #int3 = integ.quad(self._integrand2, aX, bX, args=(filtX))[0]
-        #int4 = integ.quad(self._integrand2, aY, bY, args=(filtY))[0]
         
+        # Do we need this zero-point term?
+        # .integral2 = int filter(lam)/lam dlam
         int3 =self.filterDict[filtX].integral2
         int4 =self.filterDict[filtY].integral2
         
         zp = -2.5*math.log10(int4/int3)
         
+        
+        # zero observed flux in either filter so color should be infinite
         if (int1==0. or int2==0.):
-            # zero observed flux in either filter so color should be infinite
             return float("inf")
             
         return -2.5*math.log10(int1/int2) + zp
