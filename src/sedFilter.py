@@ -104,15 +104,30 @@ class SED(object):
         return flux
 
 
-    def getSedData(self, lamMin, lamMax, nLam, z=0.):
+    def getSedData(self, **kwargs):
         """Return wavelength and flux data for wavelength grid supplied (e.g. ready for plotting)
            
-           @param lamMin    minimum wavelength in angstroms
-           @param lamMax    maximum wavelength in angstroms
-           @param nLam      number of points in wavelength grid
-           @param z         redshift of spectrum
+           kwargs can be:
+           @param lamMin       minimum wavelength in angstroms
+           @param lamMax       maximum wavelength in angstroms
+           @param nLam         number of points in wavelength grid
+           @param wavelengths  wavelength grid
+           @param z            redshift of spectrum
+           
         """
-        wavelengths = np.linspace(lamMin, lamMax, nLam)
+        # Check if wavelengths are supplied as grid or min, max, num range
+        if 'wavelengths' in kwargs:
+            wavelengths = kwargs['wavelengths']
+        elif ('lamMin' in kwargs and 'lamMax' in kwargs and 'nLam' in kwargs):
+            wavelengths = np.linspace(kwargs['lamMin'], kwargs['lamMax'], kwargs['nLam'])
+        else:
+            raise ValueError("ERROR! wavelength grid incorrectly specified")
+            
+        # Check for redshift
+        z = 0
+        if 'z' in kwargs:
+            z = kwargs['z']
+            
         fluxes = self.getFlux(wavelengths, z)
         return wavelengths, fluxes
         
@@ -556,7 +571,7 @@ def plotSedFilter(dataDict, ax, isSED=True, lamMin=2500., lamMax=12000., nLam=50
     
         ### Get array version of data back
         if (isSED):
-            wl, data_array = data.getSedData(lamMin, lamMax, nLam)
+            wl, data_array = data.getSedData(lamMin=lamMin, lamMax=lamMax, nLam=nLam)
             
             inorm = min(range(len(wl)), key=lambda i: abs(wl[i]-lamNorm))
             data_array/=data_array[inorm]

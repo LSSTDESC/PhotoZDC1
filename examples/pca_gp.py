@@ -138,7 +138,7 @@ def main(argv):
 
 
         ### Get array version of SED back
-        wl, spec_rec = sed_rec.getSedData(minWavelen, maxWavelen, nWavelen)
+        wl, spec_rec = sed_rec.getSedData(lamMin=minWavelen, lamMax=maxWavelen, nLam=nWavelen)
 
     
         ### Plot

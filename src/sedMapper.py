@@ -146,8 +146,27 @@ class PcaGaussianProc(object):
         self._gp.fit(colors[unique_idx], self.eigenvalue_coeffs[unique_idx, :])
         
         
+class BestFitTemplateSpectrum(object):
+    """Given a trial spectrum, find the best-fit spectrum within some template set """
     
+    def __init__(self, sedDict):
+        """
+        @param sedDict    dictionary containing trial template set
+        """
+        self.sedDict = sedDict
         
+    
+    def fitSpectrum(self, waveLen, fLambda):
+        """Find best-fit template spectrum to supplied spectrum fLambda(waveLen)
+        
+            @param waveLen    wavelength grid of supplied spectrum (in Angstroms)
+            @param fLambda    fluxes (wavelength units) at each wavelength of wavelength grid
+        """
+        print "unfinished"
+        #for (sedname, sed) in self.sedDict.items():
+        
+            
+     
         
     
         
@@ -201,7 +220,7 @@ def get_sed_array(sedDict, minWavelen=2999., maxWavelen=12000., nWavelen=10000,
         print "On SED", ised+1 ,"of", nSED, sedname
     
         # re-grid SEDs onto same wavelengths
-        waveLen, fl = spec.getSedData(minWavelen, maxWavelen, nWavelen)
+        waveLen, fl = spec.getSedData(lamMin=minWavelen, lamMax=maxWavelen, nLam=nWavelen)
         
         
         # normalise so they sum to 1

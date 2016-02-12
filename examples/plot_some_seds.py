@@ -30,7 +30,7 @@ for name in sed_names:
     s = sedFilter.SED(f[:,0], f[:,1])
     
     # return flux data for wavelength grid
-    wavelengths, fluxes = s.getSedData(lamMin, lamMax, nLam)
+    wavelengths, fluxes = s.getSedData(lamMin=lamMin, lamMax=lamMax, nLam=nLam)
     
     # plot
     ax = fig.add_subplot(2,3,ised)

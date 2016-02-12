@@ -46,8 +46,8 @@ for i, (sedname, sed) in enumerate(brownSEDs.items()):
 
     sed_masked = masked_seds[sedname]
     
-    wlgrid, fl_masked = sed_masked.getSedData(wlmin, wlmax, nlam)
-    wlgrid, fl_orig = sed.getSedData(wlmin, wlmax, nlam)
+    wlgrid, fl_masked = sed_masked.getSedData(lamMin=wlmin, lamMax=wlmax, nLam=nlam)
+    wlgrid, fl_orig = sed.getSedData(lamMin=wlmin, lamMax=wlmax, nLam=nlam)
     
     inorm = (np.abs(wlgrid-wnorm)).argmin()
 
