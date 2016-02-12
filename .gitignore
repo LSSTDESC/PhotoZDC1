@@ -1,1 +1,15 @@
 */*.pyc
+*~
+.gitignore
+examples/*txt
+examples/*png
+tests/*png
+tests/*txt
+tmp/
+notebooks/.ipynb_checkpoints/
+notebooks/*html
+notebooks/*txt
+src/build
+src/cphotometry.c
+src/cphotometry.so
+output/
