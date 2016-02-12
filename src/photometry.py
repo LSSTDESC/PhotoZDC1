@@ -21,6 +21,9 @@ import scipy.integrate as integ
 import scipy.interpolate as interp
 import math
 import time
+import numpy as np
+
+FAST_INTEG = True
 
 class PhotCalcs(object):
     """Base photometric calculations
@@ -89,7 +92,12 @@ class PhotCalcs(object):
         lam = self.filterDict[filtX].wavelengths
         res = self.sed.getFlux(lam, z)*self.filterDict[filtX].getTrans(lam)*lam
         integrand = interp.InterpolatedUnivariateSpline(lam, res, k=1)
-        int1 = integ.quad(integrand, aX, bX)[0]
+        if FAST_INTEG:
+            x = np.linspace(aX, bX,1000)
+            y = integrand(x)
+            int1 = integ.trapz(y,x)
+        else:
+            int1 = integ.quad(integrand, aX, bX)[0]
 
         if filtY in self.cache_kcorr.keys():
             int3 = self.cache_kcorr[filtY]
@@ -97,7 +105,12 @@ class PhotCalcs(object):
             lam = self.filterDict[filtY].wavelengths
             res = self.sed.getFlux(lam, 0)*self.filterDict[filtY].getTrans(lam)*lam
             integrand = interp.InterpolatedUnivariateSpline(lam, res, k=1)
-            int3 = integ.quad(integrand, aY, bY)[0]
+            if FAST_INTEG:
+                x = np.linspace(aY, bY,1000)
+                y = integrand(x)
+                int3 = integ.trapz(y,x)
+            else:
+                int3 = integ.quad(integrand, aY, bY)[0]
             self.cache_kcorr[filtY] = int3
         #start_time = time.time()
         # integral of SED over observed-frame filter
