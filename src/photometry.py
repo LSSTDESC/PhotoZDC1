@@ -37,7 +37,7 @@ class PhotCalcs(object):
         """
         self.sed = sed
         self.filterDict = filterDict
-        
+        self.cache_kcorr = {}
     
     def __str__(self):
         """Return custom string representation of PhotCalcs"""
@@ -91,10 +91,14 @@ class PhotCalcs(object):
         integrand = interp.InterpolatedUnivariateSpline(lam, res, k=1)
         int1 = integ.quad(integrand, aX, bX)[0]
 
-        lam = self.filterDict[filtY].wavelengths
-        res = self.sed.getFlux(lam, 0)*self.filterDict[filtY].getTrans(lam)*lam
-        integrand = interp.InterpolatedUnivariateSpline(lam, res, k=1)
-        int3 = integ.quad(integrand, aY, bY)[0]
+        if filtY in self.cache_kcorr.keys():
+            int3 = self.cache_kcorr[filtY]
+        else:
+            lam = self.filterDict[filtY].wavelengths
+            res = self.sed.getFlux(lam, 0)*self.filterDict[filtY].getTrans(lam)*lam
+            integrand = interp.InterpolatedUnivariateSpline(lam, res, k=1)
+            int3 = integ.quad(integrand, aY, bY)[0]
+            self.cache_kcorr[filtY] = int3
         #start_time = time.time()
         # integral of SED over observed-frame filter
         # int S(lam/(1+z))*X(lam)*lam dlam
