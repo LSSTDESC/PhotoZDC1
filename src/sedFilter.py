@@ -129,7 +129,11 @@ class SED(object):
             z = kwargs['z']
             
         fluxes = self.getFlux(wavelengths, z)
-        return wavelengths, fluxes
+        
+        if 'wavelengths' in kwargs:
+            return fluxes
+        else:
+            return wavelengths, fluxes
         
 
     def setEmLine(self, emLineModel):
