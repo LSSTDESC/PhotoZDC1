@@ -23,14 +23,14 @@ import math
 import time
 import numpy as np
 
-FAST_INTEG = True
+#FAST_INTEG = True
 
 class PhotCalcs(object):
     """Base photometric calculations
     
     """
 
-    def __init__(self, sed, filterDict):
+    def __init__(self, sed, filterDict, FAST_INTEG = True):
         """Initialise photometry calculation
         
            @param sed           SED object (spectral energy distribution)
@@ -41,6 +41,7 @@ class PhotCalcs(object):
         self.sed = sed
         self.filterDict = filterDict
         self.cache_kcorr = {}
+        self.FAST_INTEG = FAST_INTEG
     
     def __str__(self):
         """Return custom string representation of PhotCalcs"""
@@ -92,7 +93,7 @@ class PhotCalcs(object):
         lam = self.filterDict[filtX].wavelengths
         res = self.sed.getFlux(lam, z)*self.filterDict[filtX].getTrans(lam)*lam
         integrand = interp.InterpolatedUnivariateSpline(lam, res, k=1)
-        if FAST_INTEG:
+        if self.FAST_INTEG:
             x = np.linspace(aX, bX,1000)
             y = integrand(x)
             int1 = integ.trapz(y,x)
@@ -105,7 +106,7 @@ class PhotCalcs(object):
             lam = self.filterDict[filtY].wavelengths
             res = self.sed.getFlux(lam, 0)*self.filterDict[filtY].getTrans(lam)*lam
             integrand = interp.InterpolatedUnivariateSpline(lam, res, k=1)
-            if FAST_INTEG:
+            if self.FAST_INTEG:
                 x = np.linspace(aY, bY,1000)
                 y = integrand(x)
                 int3 = integ.trapz(y,x)
