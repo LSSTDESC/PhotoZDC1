@@ -1,9 +1,10 @@
 """Classes and functions that manipulate the SEDs and the filters
 
   Classes:
-  SED:          holds flux vs wavelength data
-  Filter:       holds transmission vs wavelength data
-  MaskSEDs      mask emission line regions of rest-frame SEDs
+  SED:                holds flux vs wavelength data
+  Filter:             holds transmission vs wavelength data
+  MaskSEDs            mask emission line regions of rest-frame SEDs
+  ContinuumExtractor  extract continuum from SEDs
   EmissionLine: holds emission line model (TO BE IMPLEMENTED)
   
   Helper functions:
@@ -18,9 +19,13 @@
 import os
 import scipy.interpolate as interp
 import scipy.integrate as integ
+from sklearn.decomposition import PCA as sklPCA
+import scipy.signal as signal
 import numpy as np
 import itertools
 import collections
+
+import sedMapper
 
 
 
@@ -175,7 +180,7 @@ class Filter(object):
         # keep track of original range and resolution of transmission function 
         self.lamMin = waveLengths[0]
         self.lamMax = waveLengths[-1]
-        self.nLam = len(waveLengths)    
+        self.nLam = len(waveLengths)   
 		#this could come handy if we need to defer the construction of the interpolator
         self.wavelengths = waveLengths
         self.transmission = transmission
@@ -282,6 +287,7 @@ class MaskSEDs(object):
         self.nsed = len(origSEDs)
         self.wlnorm = 5500.  # normalise SEDs to 1 at 5500A
         
+        # new dictionary of the masked SEDs
         self.maskedSEDs = {}
         
         # wavelength ranges containing common emission lines in angstroms
@@ -449,7 +455,150 @@ class MaskSEDs(object):
     #        yinterp.append(m*x + c)
     #    
     #    return yinterp
+    
+class ContinuumExtractor(object):
+    """Given SEDs (continuum+emission lines) return continuum part of SEDs only
+    
+       Prescription:
+
+       1) crude masking by linearly interpolating across emission line regions (MaskSEDs)
+       2) PCA a library of synthetic spectra
+       3) project crudely masked SEDs onto these PC's
+       4) reconstruct the crudely masked SEDs from the PC's
+       5) divide out smooth reconstructed SEDs
+       6) high pass filter to remove high frequency noise etc
+    """
+    
+    def __init__(self, seds, syntheticSEDs, mask_file, minWavelen=600., maxWavelen=11000., nWavelen=10000,
+                       nComps=-1):
+        """Initialise PCA 
+          
+           @param seds          SEDs to find continuum of
+           @param sytheticSEDs  Library of synthetic SEDs (no emission lines)
+           @param mask_file     file containing wavelength regions to mask
+           @param minWavelen    minimum wavelength in Angstroms
+           @param maxWavelen    maximum wavelength in Angstroms
+           @param nWavelen      number of steps in wavelength grid 
+           @param nComps        number of components to keep (if -1 keep all)
+        """
+        if (nComps<0):
+            nComps = len(syntheticSEDs)
         
+        self.minWavelen = minWavelen
+        self.maxWavelen = maxWavelen
+        self.nWavelen = nWavelen
+        
+        self.sedsContinuum = {}  
+        
+        ### Find PC's of synthetic spectra
+        self._doPCA(nComps, syntheticSEDs)
+        
+        ### Mask out wavelength regions likely to have emission lines
+        self._doMask(seds, mask_file)
+        
+        
+    def getContinua(self, window):
+        """Estimate continuum for each SED in library
+        
+           @param window    width of rolling median window to remove high frequency noise in Angstroms
+        """
+        
+        ### Return list of SED names and SEDs on an array identical to that used to PCA the 
+        ### synthetic spectra 
+        name_list = self.sedsMasked.keys()
+        waveLen, sed_array = sedMapper.get_sed_array(self.sedsMasked, 
+                                                        self.minWavelen, self.maxWavelen, self.nWavelen)
+                            
+        ### Convert window in Angstroms to window in pixels (that is an odd integer)
+        window_pix = int(window/(waveLen[1] - waveLen[0]))
+        if (window_pix % 2 == 0):
+            window_pix += 1
+                            
+        for i in range(len(self.sedsMasked)):
+        
+            ### Pick SED out of masked library
+            sed = sed_array[i,:]
+            
+            ### Reconstruct using the eigenspectra of the synthetic library (no emission lines/noise)
+            sed_rec = self._reconstructSmoothSpectrum(sed)
+            
+            ### Return continuum after high-pass filtering to get rid of high frequency noise 
+            sed_continuum = self._getContinuum(sed, sed_rec, window_pix)
+            
+            ### Turn into SED object
+            sedContinuum = SED(waveLen, sed_continuum)
+            
+            ### Add to dictionary
+            self.sedsContinuum[name_list[i]] = sedContinuum
+            
+            
+    def returnContinua(self):
+        """Return dictionary containing SED continuua"""
+        
+        if (len(self.sedsContinuum)<1):
+            raise ValueError("Error! Continua have not yet been estimated")
+        return self.sedsContinuum
+        
+    
+    def _getContinuum(self, sed, sed_rec, window):
+        """Return continuum after high-pass filtering to get rid of high frequency noise 
+           
+           @param sed       original masked SED
+           @param sed_rec   SED after reconstruction using eigenspectra of the synthetic library
+           @param window    width of rolling median window to remove high frequency noise
+        """
+        
+        ratio = sed/np.squeeze(sed_rec.T)
+        smooth = signal.medfilt(ratio, window)
+        
+        ### Project against smooth being zero
+        smooth[ np.where(smooth<1e-12) ] = np.min( smooth[ np.where(smooth>0) ] )
+        sed = sed/smooth
+        
+        ### Protect against negative fluxes
+        sed[np.where(sed<0)] = 0.
+        
+        return sed
+    
+    
+    def _reconstructSmoothSpectrum(self, sed):
+        """Reconstruct using the eigenspectra of the synthetic library (no emission lines/noise)
+          
+           @param sed    SED to reconstruct
+        """
+        coeffs = np.array(self.specPCA.transform(sed)) 
+        sed_rec = np.dot(coeffs, self.specPCA.components_) + self.specPCA.mean_
+        norm = np.sum(sed_rec)
+        sed_rec /= norm
+        return sed_rec
+    
+        
+    def _doMask(self, seds, mask_file):
+         """Mask out regions likely to have emission lines
+         
+            @param seds         SEDs to estimate continuum of
+            @param mask_file    list of wavelength regions to mask
+         """
+
+         maskSeds = MaskSEDs(seds, mask_file)
+         maskSeds.mask_SEDs()
+         self.sedsMasked = maskSeds.return_masked_SEDs()
+         
+        
+    def _doPCA(self, nComps, syntheticSEDs):
+        """Do PCA on the synthetic spectra
+        
+           @param nComps           number of components to keep
+           @param syntheticSEDs    library of synthetic spectra
+        """
+    
+        waveLen, smooth_spectra = sedMapper.get_sed_array(syntheticSEDs, 
+                                                          self.minWavelen, self.maxWavelen, self.nWavelen)
+    
+        self.specPCA = sklPCA(nComps)
+        self.specPCA.fit(smooth_spectra)
+
+
 
 class MakeBandpass(object):
     
@@ -566,12 +715,13 @@ def createFilterDict(listOfFiltersFile, pathToFile="../filter_data/"):
     return filterDict
     
     
-def plotSedFilter(dataDict, ax, isSED=True, lamMin=2500., lamMax=12000., nLam=5000):
+def plotSedFilter(dataDict, ax, isSED=True, lamMin=2500., lamMax=12000., nLam=5000, color='red'):
     """Plots the data in dataDict on matplotlib axes given by ax"""
     
     lamNorm = 5500.
     
     for dataname, data in dataDict.items():
+        print dataname,
     
         ### Get array version of data back
         if (isSED):
@@ -581,8 +731,9 @@ def plotSedFilter(dataDict, ax, isSED=True, lamMin=2500., lamMax=12000., nLam=50
             data_array/=data_array[inorm]
         else:
             wl, data_array = data.getFilterData()
+            print wl[0], wl[-1]
     
-        ax.plot(wl, data_array, color='red')
+        ax.plot(wl, data_array, color=color)
 
         ax.set_xlabel('wavelength (Angstroms)', fontsize=24)
         if (isSED):
