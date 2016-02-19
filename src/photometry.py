@@ -23,6 +23,8 @@ import math
 import time
 import numpy as np
 
+#import sedFilter
+
 #FAST_INTEG = True
 
 class PhotCalcs(object):
@@ -30,7 +32,7 @@ class PhotCalcs(object):
     
     """
 
-    def __init__(self, sed, filterDict, FAST_INTEG = True):
+    def __init__(self, sed, filterDict, FAST_INTEG = True, INTEG_PREC=1000):
         """Initialise photometry calculation
         
            @param sed           SED object (spectral energy distribution)
@@ -42,6 +44,21 @@ class PhotCalcs(object):
         self.filterDict = filterDict
         self.cache_kcorr = {}
         self.FAST_INTEG = FAST_INTEG
+        self.INTEG_PREC = INTEG_PREC
+        
+        
+        #filter_list = sedFilter.orderFiltersByLamEff(self.filterDict)
+        #for i in range(len(filter_list)-1):
+        #    int3 =self.filterDict[filter_list[i]].integral2
+        #    int4 =self.filterDict[filter_list[i+1]].integral2
+        #    zp = -2.5*math.log10(int4/int3)
+        #    print "zp between filter", filter_list[i] ,"and", filter_list[i+1] ,"=", zp
+        #    
+        # zp between filter SDSS_u and SDSS_g = -2.01123847391
+        # zp between filter SDSS_g and SDSS_r = 0.0155296994297
+        # zp between filter SDSS_r and SDSS_i = 0.358714361439
+        # zp between filter SDSS_i and SDSS_z = 1.62849985131
+        
     
     def __str__(self):
         """Return custom string representation of PhotCalcs"""
@@ -94,7 +111,7 @@ class PhotCalcs(object):
         res = self.sed.getFlux(lam, z)*self.filterDict[filtX].getTrans(lam)*lam
         integrand = interp.InterpolatedUnivariateSpline(lam, res, k=1)
         if self.FAST_INTEG:
-            x = np.linspace(aX, bX,1000)
+            x = np.linspace(aX, bX, self.INTEG_PREC)
             y = integrand(x)
             int1 = integ.trapz(y,x)
         else:
@@ -107,7 +124,7 @@ class PhotCalcs(object):
             res = self.sed.getFlux(lam, 0)*self.filterDict[filtY].getTrans(lam)*lam
             integrand = interp.InterpolatedUnivariateSpline(lam, res, k=1)
             if self.FAST_INTEG:
-                x = np.linspace(aY, bY,1000)
+                x = np.linspace(aY, bY, self.INTEG_PREC)
                 y = integrand(x)
                 int3 = integ.trapz(y,x)
             else:
@@ -192,7 +209,7 @@ class PhotCalcs(object):
         int2 = integ.quad(integrand, aY, bY)[0]
         
         
-        # Do we need this zero-point term?
+        # Not sure about this zero-point term? But colors are totally off without it
         # .integral2 = int filter(lam)/lam dlam
         int3 =self.filterDict[filtX].integral2
         int4 =self.filterDict[filtY].integral2
