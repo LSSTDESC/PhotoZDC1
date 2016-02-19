@@ -1,5 +1,7 @@
 # Filter transmission functions
 
+*** See note below on SDSS filters
+
 This directory will contain the filter transmission data. Currently it is in the form of text files (no 
 special header format) with two columns: first column is wavelengths in **ANGSTROMS** and second column is the
 filter transmission (no units, value between 0 and 1). 
@@ -52,3 +54,10 @@ GALEX_galex_FUV.dati
 2MASS_Ksband_2mass.dati
 2MASS_Jband_2mass.dati
 2MASS_Hband_2mass.dati
+
+**** Note on SDSS filters:
+
+The SDSS filters from TAO don't seem to be quite correct. Use the other SDSS filters unless comparing to
+TAO magnitudes:
+SDSS_[ugriz].best
+
