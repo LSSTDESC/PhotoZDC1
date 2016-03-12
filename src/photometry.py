@@ -199,20 +199,31 @@ class PhotCalcs(object):
         lam = self.filterDict[filtX].wavelengths
         res = self.sed.getFlux(lam, z)*self.filterDict[filtX].getTrans(lam)*lam
         integrand = interp.InterpolatedUnivariateSpline(lam, res, k=1)
-        int1 = integ.quad(integrand, aX, bX)[0]
+        if self.FAST_INTEG:
+            x = np.linspace(aX, bX, self.INTEG_PREC)
+            y = integrand(x)
+            int1 = integ.trapz(y,x)
+        else:
+            int1 = integ.quad(integrand, aX, bX)[0]
+        
         
         
         # int S(lam_obs)*Y(lam)*lam dlam
         lam = self.filterDict[filtY].wavelengths
         res = self.sed.getFlux(lam, z)*self.filterDict[filtY].getTrans(lam)*lam
         integrand = interp.InterpolatedUnivariateSpline(lam, res, k=1)
-        int2 = integ.quad(integrand, aY, bY)[0]
+        if self.FAST_INTEG:
+            x = np.linspace(aY, bY, self.INTEG_PREC)
+            y = integrand(x)
+            int2 = integ.trapz(y,x)
+        else:
+            int2 = integ.quad(integrand, aY, bY)[0]
         
         
         # Not sure about this zero-point term? But colors are totally off without it
         # .integral2 = int filter(lam)/lam dlam
-        int3 =self.filterDict[filtX].integral2
-        int4 =self.filterDict[filtY].integral2
+        int3 = self.filterDict[filtX].integral2
+        int4 = self.filterDict[filtY].integral2
         
         zp = -2.5*math.log10(int4/int3)
         
