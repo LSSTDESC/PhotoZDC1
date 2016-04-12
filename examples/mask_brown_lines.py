@@ -18,7 +18,7 @@ emission_lines_file = '../eml_data/emission_lines.dat'
 
 # Read in Brown SEDs
 listOfSedsFile = "brown.seds"
-pathToFile = "/mnt/drive2/repos/PhotoZDC1/sed_data/"
+pathToFile = "../sed_data/"
 brownSEDs = sedFilter.createSedDict(listOfSedsFile, pathToFile)
 
 
