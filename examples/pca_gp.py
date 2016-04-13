@@ -83,16 +83,16 @@ def main(argv):
 
 
     ### Wavelength grid to do PCA on
-    minWavelen = 2999.
+    minWavelen = 1000.
     maxWavelen = 12000.
     nWavelen = 10000
 
                  
     ### Do PCA and train GP
     ncomp = nSED
-    
+    nfit = -1
     pcaGP = sedMapper.PcaGaussianProc(sedDict, filterDict, color_file, ncomp, 
-                                      minWavelen, maxWavelen, nWavelen,
+                                      minWavelen, maxWavelen, nWavelen, nfit,
                                       corr_type, theta0)
     colors = pcaGP._colors
     spectra = pcaGP._spectra
