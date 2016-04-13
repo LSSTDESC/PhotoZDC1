@@ -68,14 +68,14 @@ def main(argv):
 
     ### Read SEDs into a dictionary
     listOfSeds = 'brown_masked.seds'                             
-    pathToSEDs = '/mnt/drive2/repos/PhotoZDC1/sed_data/'
+    pathToSEDs = '../sed_data'
     sedDict = sedFilter.createSedDict(listOfSeds, pathToSEDs)
     nSED = len(sedDict)
     print "Number of SEDs =", nSED
 
 
     ### Filter set to calculate colors
-    pathToFilters = '/mnt/drive2/repos/PhotoZDC1/filter_data/'
+    pathToFilters = '../filter_data/'
     filterDict = sedFilter.createFilterDict(listOfFilters, pathToFilters)
     filterList = sedFilter.orderFiltersByLamEff(filterDict)
     nFilters = len(filterList)
