@@ -279,8 +279,8 @@ class MaskSEDs(object):
            correspond to regions where strong nebular emission lines occur in galaxies.
         
            
-           @param origSEDs                dictionary containing SED set
-           @param emission_lines_file    file containing regions of SED to maskat
+           @param origSEDs               dictionary containing SED set
+           @param emission_lines_file    file containing regions of SED to mask
         """
         
         self.origSEDs = origSEDs
@@ -669,7 +669,7 @@ class EmissionLine(object):
         
 #### Helper functions ####
 
-def createSedDict(listOfSedsFile, pathToFile="../sed_data/"):
+def createSedDict(listOfSedsFile, pathToFile="../sed_data/", normMeth='', doPrinting=True):
     """Read file containing list of SEDs to read, then read these SEDs into a dictionary
     
        Dictionary keyword is a string: name of the file that contained the filter (without path or extension)
@@ -684,9 +684,58 @@ def createSedDict(listOfSedsFile, pathToFile="../sed_data/"):
         sedData = np.loadtxt(pathToFile + "/" + line.rstrip())
         # sedName = line.rstrip().split('.')[0] -> only works if single '.' in filename delineating extension
         sedName = "_".join(line.rstrip().split('.')[:-1])
-        print "Adding SED", sedName ,"to dictionary"
         
-        sed = SED(sedData[:,0], sedData[:,1])
+        if doPrinting:
+            print "Adding SED", sedName ,"to dictionary"
+            
+        # check wavelength grid
+        wavelengths = sedData[:,0]
+        nlam = len(wavelengths)
+        """
+        dlam1 = abs(wavelengths[1]-wavelengths[0])
+        dlam2 = abs(wavelengths[2]-wavelengths[1])
+        
+        if (dlam1-dlam2)<1e-6:
+            isLinearSpaced = True
+            isLogSpaced = False
+            print "Wavelengths are linear spaced"
+        elif (dlam1/(wavelengths[0]+dlam1/2.) - dlam2/(wavelengths[0]+dlam2/2.))<1e-6:
+            isLinearSpaced = False
+            isLogSpaced = True
+            print "Wavelengths are log spaced"
+        else:
+            isLinearSpaced = False
+            isLogSpaced = False
+            print "Wavelengths are log spaced"
+        """
+            
+        # method of normalising the SED
+        if normMeth=='':
+            # no normalisation done
+            flux = sedData[:,1]
+        elif normMeth=='sumTo1':
+            # normalise so it sums to 1
+            flux = sedData[:,1]/np.sum(sedData[:,1])
+        elif normMeth=='intTo1':
+            # normalise so it (roughly) integrates to 1
+            intval = 0
+            for i in range(nlam-1):
+                dy = abs(sedData[i+1,1] - sedData[i,1])
+                dx = wavelengths[i+1] - wavelengths[i]
+                intval += dy*dx
+            flux = sedData[:,1]/intval
+        elif normMeth=='setAt5500':
+            # normalise so it is equal to 1 at 5500A
+            inorm = np.argmin(abs(wavelengths-5500.))
+            flux = sedData[:,1]/sedData[inorm,1]
+        elif normMeth=='setAt8000':
+            # normalise so it is equal to 1 at 8000A
+            inorm = np.argmin(abs(wavelengths-8000.))
+            flux = sedData[:,1]/sedData[inorm,1]   
+        else:
+            raise ValueError("ERROR! unknown normalisation method")
+            
+        sed = SED(wavelengths, flux)
         sedDict[sedName] = sed
            
     return sedDict
@@ -779,7 +828,30 @@ def orderFiltersByLamEff(filterDict):
     return filter_order
     
 
+def writeSEDs(sedDict, outputfile, minWavelen=2999., maxWavelen=12000., nWavelen=10000):
+    """
+    """
 
+    spectra = []    
+    for ised, (sedname, spec) in enumerate(sedDict.items()):
+    
+        
+        print "On SED", ised+1 ,"of", len(sedDict), sedname
+    
+        # re-grid SEDs onto same wavelengths
+        waveLen, fl = spec.getSedData(lamMin=minWavelen, lamMax=maxWavelen, nLam=nWavelen)
+        
+        if (ised<1):
+            spectra.append(waveLen)
+        
+        # normalise so they sum to 1
+        norm = np.sum(fl)
+        spectra.append(fl/norm)
+        
+    spectra = np.asarray(spectra)   
+        
+    # write to file
+    np.savetxt(outputfile, spectra)
 
 
 
