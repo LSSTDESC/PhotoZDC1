@@ -39,7 +39,7 @@ class PcaGaussianProc(object):
     """
 
     def __init__(self, sedDict, filterDict, color_file, ncomp, minWavelen=2999., maxWavelen=12000.,
-                       nWavelen=10000, corr_type='cubic', theta0=0.2):
+                       nWavelen=10000, nfit=-1, corr_type='cubic', theta0=0.2):
         """Initialise PCA+GP calculation 
         
            @param sedDict       dictionary of SEDs
@@ -57,6 +57,9 @@ class PcaGaussianProc(object):
         waveLen, spectra, colors = get_sed_array(sedDict, minWavelen, maxWavelen, nWavelen, 
                                                  filterDict, color_file)
         
+        # in case not all eigenvalues are used in GP mapping
+        #self.templateFitter = BestFitTemplateSpectrum(sedDict)
+        
         self._waveLen = waveLen
         self._spectra = spectra
         self._colors = colors
@@ -67,7 +70,9 @@ class PcaGaussianProc(object):
         
         # perform PCA and train GP
         self._doPCA(ncomp, self._spectra)
-        self._trainGP(self._colors)
+        self._trainGP(self._colors, nfit)
+        
+        self._isRetrained = False
         
         
     def generateSpectrum(self, colors):
@@ -76,6 +81,23 @@ class PcaGaussianProc(object):
         """
         # Generate new set of eigenvalues for supplied colors
         eigenvals_generated = self._gp.predict(colors)
+        
+        # check if not all eigenvalues were used in GP
+        nGP = eigenvals_generated.shape[1]
+        if (nGP < self.eigenspectra.shape[0] and not self._isRetrained):
+        
+            if (self._isRetrained):
+                raise ValueError("ERROR! cannot have ")
+            print nGP, self.eigenspectra.shape[0]
+        
+            # find SED with closest colors
+            ifit = self._fitColors(colors)
+            
+            #eigenvals_generated = eigenvals_generated + self.eigenvalue_coeffs[ifit, nGP+1,:]
+        
+            add_on = np.reshape(self.eigenvalue_coeffs[ifit, nGP:], (1,len(self.eigenvalue_coeffs[ifit, nGP:])))
+            eigenvals_generated = np.concatenate((eigenvals_generated, add_on), axis=1)
+            #raise ValueError("Error! not yet implemented")
 
         # Reconstruct SED and normalise so it sums to 1
         spec_rec = np.dot(eigenvals_generated, self.eigenspectra) + self.meanSpec
@@ -91,7 +113,7 @@ class PcaGaussianProc(object):
         return sed_rec
         
         
-    def reTrainGP(self, ncomp, index_to_remove=float('inf')):
+    def reTrainGP(self, ncomp, index_to_remove=float('inf'), nfit=-1):
         """For debugging/testing/checking
         
            Re-does the PCA+GP but after removing one of the spectra, the one indexed by 'index_to_remove'
@@ -99,6 +121,7 @@ class PcaGaussianProc(object):
            initially trained state
            
         """
+        
         # indices of every SED
         all_indices = range(len(self._spectra))
 
@@ -110,11 +133,16 @@ class PcaGaussianProc(object):
         self._doPCA(ncomp, spectra_test)
         
         # redo GP
-        self._trainGP(colors_test)
+        self._trainGP(colors_test, nfit)
+        
+        self._isRetrained = True
         
     
     def _doPCA(self, ncomp, spectra):
-        """
+        """PCA the SED set in array
+        
+           @param ncomp    number of principle components to keep
+           @param spectra  array of SEDs
         """
     
         specPCA = sklPCA(ncomp)
@@ -128,10 +156,17 @@ class PcaGaussianProc(object):
         print "Eigenvalues shape:", self.eigenvalue_coeffs.shape
         
         
-    def _trainGP(self, colors):
-        """
+    def _trainGP(self, colors, nfit=-1):
+        """Train the mapping between eigenvalues and color via Gaussian Process
+        
+           @param colors    array of galaxy colors
+           @param nfit      number of eigenvalues to use in the mapping (if =-1 use all)
         """
         self._gp = GaussianProcess(corr = self._corr_type, theta0=self._theta0)
+        
+        if (nfit<0):
+            nfit = self.eigenvalue_coeffs.shape[1]
+            print "Using all", nfit ,"eigenvalues in GP"
 
         # BK note:
         # Make sure we only include unique color values
@@ -143,11 +178,58 @@ class PcaGaussianProc(object):
         print "Number of unique colors in SED set", len(unique_idx), "total number of SEDs =", len(colors)
 
         # Train and predict eigenvalues for this color set
-        self._gp.fit(colors[unique_idx], self.eigenvalue_coeffs[unique_idx, :])
+        self._gp.fit(colors[unique_idx], self.eigenvalue_coeffs[unique_idx, :nfit])
+        
+        
+    def _fitColors(self, colors):
+        """Find best fit SED colors to galaxy colors
+        """
+        c = np.reshape(colors, (1,len(colors)))
+        delta_color = self._colors - c
+        delta_color_sq = delta_color*delta_color
+        #mean_dcsq = np.mean(delta_color_sq, axis=1)
+        #std_dcsq = np.std(delta_color_sq, axis=1)
+        
+        rms_colors = np.sqrt(np.sum(delta_color_sq, 1))
+        
+        """
+        import matplotlib.pyplot as plt
+        
+        
+        ## can make this vectorised?
+        std_lim = 50.
+        n_outlier = 0
+        rms_colors = []
+        for i in range(len(delta_color)):
+
+            isort = np.argsort(abs(delta_color_sq[i,:]-mean_dcsq[i]))
+            
+            id_remove = isort[-n_outlier:][np.where(delta_color_sq[i, isort[-n_outlier:]] > std_lim*std_dcsq[i])[0]]
+            ir = np.delete(range(len(isort)), id_remove)
+            print len(ir)
+            rms_colors.append(np.sqrt(np.sum(delta_color_sq[i, ir])/float(len(ir))))
+            
+            
+            fig = plt.figure(figsize=(10,10))
+            ax = fig.add_subplot(111)
+            ax.hist(abs(delta_color_sq[i,:]-mean_dcsq[i]))
+            print std_lim*std_dcsq[i], delta_color_sq[i, isort[-10:]]
+            #print len(ir) 
+            #print np.max(delta_color_sq[i, ir])
+            
+            print "keeping", len(delta_color_sq[i,ir])
+            """
+        #print rms_colors
+        ifit = np.argmin(rms_colors)
+        #print "ifit =", ifit
+        return ifit
+        
+        
         
         
 class BestFitTemplateSpectrum(object):
-    """Given a trial spectrum, find the best-fit spectrum within some template set """
+    """Given a trial spectrum, find the best-fit spectrum within some template set 
+       @warning: this may be garbage"""
     
     def __init__(self, sedDict):
         """
@@ -156,21 +238,91 @@ class BestFitTemplateSpectrum(object):
         self.sedDict = sedDict
         
     
-    def fitSpectrum(self, waveLen, fLambda):
+    def fitSpectrum(self, waveLen, fLambda, inorm):
         """Find best-fit template spectrum to supplied spectrum fLambda(waveLen)
         
             @param waveLen    wavelength grid of supplied spectrum (in Angstroms)
             @param fLambda    fluxes (wavelength units) at each wavelength of wavelength grid
+            @param inorm      index of wavelength to normalise at
         """
-        print "unfinished"
-        #for (sedname, sed) in self.sedDict.items():
+        # normalise so spectrum sums to 1
+        fLambda /= fLambda[inorm] #np.sum(fLambda)
         
+        min_rms = 1e19
+        sed_fit = ""
+        for i, (sedname, sed) in enumerate(self.sedDict.items()):
+        
+            # retrieve SED flux and normalise so sums to 1
+            fl = sed.getSedData(wavelengths=waveLen)
+            fl /= fl[inorm] #np.sum(fl)
             
+            rms = np.sqrt(np.sum((fl - fLambda)*(fl - fLambda)))
+            
+            if (rms<min_rms):
+                min_rms = rms
+                sed_fit = sedname
+                
+        if (sed_fit==""):
+            raise ValueError("Error!: no spectrum was fitted")
+            
+        #print "Spectrum", sed_fit ,"was the best fit"
+        return sed_fit
+        
      
         
+class NearestNeighbor(object):
+
+    def __init__(self, sed_lib_data):
+        """
+        @param sed_lib_data   each row is data for a different SED in the SED library
+                              each column is a different "feature" of the SED, could be color or eigenvalue
+        """
+        
+        self._sed_lib_data = sed_lib_data
+        
+        
+    def find_nearest_neighbors(self, data_vector, nnn=7):
+        """Return the indices and distances of the SEDs in the SED library of the nnn nearest neighbors 
+        
+        """
+        # check data vector has enough features
+        if (len(data_vector) !=  self._sed_lib_data.shape[1]):
+            raise ValueError("Error! Data vector has wrong number of features")
+        
+        # make data vector the same size as sed_lib
+        data_vector_matrix = np.zeros(self._sed_lib_data.shape)
+        for i in range(self._sed_lib_data.shape[0]):
+            data_vector_matrix[i,:] = data_vector
+        
+        
+        # subtract from each other, square, then sum across columns to get distance squared to each SED
+        ddatasq = (self._sed_lib_data - data_vector_matrix)*(self._sed_lib_data - data_vector_matrix)
+        distance_sq = np.sum(ddatasq, axis=1)
+
+        # sort by ascending distance        
+        isort = np.argsort(distance_sq)
+        dsort = np.sort(distance_sq)
+        
+        ### The weight kernel is currently 1/d^2 but this can be changed
+        
+        # weights will be 1/distance^2, make sure they sum to 1
+        suminvsq = 0.
+        eps = 1e-10
+        for i in range(nnn):
+            suminvsq += 1./(distance_sq[isort[i]]+eps)
+        # put result into list of tuples: first is index of neighbor SED, second is its weight
+        
+        neighbors = []
+        for i in range(nnn):
+            weight = 1./(distance_sq[isort[i]]+eps)
+            #print weight, suminvsq
+            neighbors.append( (isort[i], weight/suminvsq, distance_sq[isort[i]]) )
+        
+        return neighbors
+        
+
     
-        
-        
+    
 ##### Helper functions
 
 
@@ -240,7 +392,7 @@ def get_sed_array(sedDict, minWavelen=2999., maxWavelen=12000., nWavelen=10000,
             else:
         
                 # calculating colors
-                spec = sedFilter.SED(waveLen, fl/norm)
+                spec = sedFilter.SED(waveLen, fl)#/norm)
                 pcalcs = phot.PhotCalcs(spec, filterDict)
     
                 # in each filter
@@ -270,16 +422,23 @@ def get_sed_array(sedDict, minWavelen=2999., maxWavelen=12000., nWavelen=10000,
         return waveLen, spectra
         
 
-def get_sed_colors(sedDict, filterDict):
+
+def get_sed_colors(sedDict, filterDict, ipivot=-1, doPrinting=True):
     """Calculate the colors for all the SEDs in sedDict given the filters in filterDict, return as pandas
        data frame
     
        @param sedDict       dictionary of SEDs
        @param filterDict    dictionary of filters
+       @param ipivot        index of filter to reference ALL colors to (if -1 just does usual)
+       @param doPrinting 
     """
     
-    ncolors = len(filterDict) - 1
+    nfilters = len(filterDict)
+    ncolors = nfilters - 1
     nseds = len(sedDict)
+    
+    if ipivot>ncolors:
+        raise ValueError("Error! pivot filter outside range")
 
     # sort based upon effective wavelength
     filter_order = sedFilter.orderFiltersByLamEff(filterDict)
@@ -296,25 +455,57 @@ def get_sed_colors(sedDict, filterDict):
     tot_time = 0.
     for sedname, sed in sedDict.items():
     
-        print "Calculating colors for SED:", sedname
+        if doPrinting:
+            print "Calculating colors for SED:", sedname
         sed_names.append(sedname)
         p = phot.PhotCalcs(sed, filterDict)
   
         start_time = time.time()
-        for j in range(ncolors):
         
-            sed_colors[i,j] = p.computeColor(filter_order[j], filter_order[j+1], 0.)
+        if (ipivot>=0):
+            # all colors in reference to a pivot filter, e.g. u-r, g-r, r-i, r-z, r-y
+            #ii = 0
+            colors = []
+            for j in range(nfilters):
+                if (j<ipivot):
+                    colors.append(p.computeColor(filter_order[j], filter_order[ipivot], 0.))
+                    #sed_colors[i,ii] = p.computeColor(filter_order[j], filter_order[ipivot], 0.)
+                    if (i<1):
+                        #print ii, 
+                        print "Doing", filter_order[j] ,"-", filter_order[ipivot], 
+                        print p.computeColor(filter_order[j], filter_order[ipivot], 0.)
+                    #ii=+1
+                elif (j>ipivot):
+                    #sed_colors[i,ii] = p.computeColor(filter_order[ipivot], filter_order[j], 0.)
+                    colors.append(p.computeColor(filter_order[ipivot], filter_order[j], 0.))
+                    if (i<1):
+                        #print ii, 
+                        print "Doing", filter_order[ipivot] ,"-", filter_order[j],
+                        print p.computeColor(filter_order[ipivot], filter_order[j], 0.)
+                    #ii=+1
+                # note that nothing is done when filter index j = ipivot    
+            if (i<1):
+                print colors, len(colors)
+            for j in range(ncolors):
+                sed_colors[i,j] = colors[j]  
+        else:
+            # traditional color definition: e.g. u-g, g-r, r-i etc
+            for j in range(ncolors):
+                sed_colors[i,j] = p.computeColor(filter_order[j], filter_order[j+1], 0.)
+            
         end_time = time.time()
-        print "Took", end_time - start_time, "to compute", ncolors, "colors"
+        
+        if doPrinting:
+            print "Took", end_time - start_time, "to compute", ncolors, "colors"
+        
         tot_time += (end_time - start_time)
+        
         i+=1
-    print "Total time to compute colors for SEDs =", tot_time
+    if doPrinting:
+        print "Total time to compute colors for SEDs =", tot_time
     
     # convert to dataframe and return
     return pd.DataFrame(sed_colors, columns=color_names, index=sed_names)
-
-
-
         
 
 def check_color_match(galaxy_colors, sed_colors, nstd=3.):
