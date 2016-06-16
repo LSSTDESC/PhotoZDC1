@@ -11,9 +11,12 @@ def color_outlines(bp, column_name, color):
        @param color          color to color outlines with
     """
 
-    parts = ['boxes', 'whiskers', 'medians', 'caps']
+    parts = ['boxes', 'whiskers', 'medians', 'caps', 'fliers']
     for part in parts:
         plt.setp(bp[column_name][part], color=color)
+        if part=='fliers':
+            for flier in bp[column_name]['fliers']:
+                flier.set(marker='x', color=color, alpha=0.5)
 
 
 def fill_boxes_with_color(numBoxes, bp, ax, column_name, color):
@@ -115,5 +118,6 @@ def color_boxplot(ax, df1, df2, color_columns, redshift_columns, zmin, zmax, dbi
                     
     # set the tick labels along the redshift axes
     xtickNames = plt.setp(ax, xticklabels=zbins)
+    
     
 
