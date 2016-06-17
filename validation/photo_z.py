@@ -61,14 +61,35 @@ def read_txt(filename, sep):
 
 ### Reader for FITS binary file
 def read_fits(filename):
-    raise NotImplementedError
     
+    hdulist = fits.open(filename)
 
-### Reader for csv file
-def read_csv(filename):
-    raise NotImplementedError
+    cols = hdulist[1].columns.names
+    data = hdulist[1].data
     
+    if "objid" not in cols:
+        raise ValueError("Error! objid column not found in FITS file")
 
+    # because of the following error:
+    # ValueError: Big-endian buffer not supported on little-endian compiler
+    # have to unpack the FITS file and manually stack it back into an array
+    # before adding to pandas dataframe
+    x = data[cols[0]]
+    for i in range(1, len(cols)):
+        x = np.vstack((x, data[cols[i]]))
+
+    data_array = x.T
+    data_array.shape
+    
+    # create dataframe 
+    df = pd.DataFrame(data_array, columns=cols)
+    
+    # set the objid column as the dataframe index    
+    df = df.set_index("objid")
+    
+    return df
+    
+    
 ### Reader for HDF5
 def read_hdf5(filename):
     raise NotImplementedError
