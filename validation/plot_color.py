@@ -119,5 +119,27 @@ def color_boxplot(ax, df1, df2, color_columns, redshift_columns, zmin, zmax, dbi
     # set the tick labels along the redshift axes
     xtickNames = plt.setp(ax, xticklabels=zbins)
     
-    
+    # handmake the legend
+    import matplotlib.lines as mpll
 
+    xdata = np.arange(0,3,0.1)
+    ydata = np.arange(0,3,0.1) 
+    
+    x1 = mpll.Line2D(xdata, ydata, linewidth=None, linestyle='none', color=color1, 
+                marker='s', markersize=15, markeredgewidth=None, 
+                markeredgecolor=None, markerfacecolor=None, 
+                markerfacecoloralt='none', fillstyle=None, antialiased=None, 
+                dash_capstyle=None, solid_capstyle=None, dash_joinstyle=None, 
+                solid_joinstyle=None, pickradius=5, drawstyle=None, markevery=10,
+                alpha=0.5)
+
+    x2 = mpll.Line2D(xdata, ydata, linewidth=None, linestyle='solid', color=color2, 
+                marker=None, markersize=15, markeredgewidth=None, 
+                markeredgecolor=None, markerfacecolor=None, 
+                markerfacecoloralt='none', fillstyle=None, antialiased=None, 
+                dash_capstyle=None, solid_capstyle=None, dash_joinstyle=None, 
+                solid_joinstyle=None, pickradius=5, drawstyle=None, markevery=10,
+                alpha=1)
+    ax.legend([x1, x2], ['data1', 'data2'])
+    
+    return [x1, x2]
