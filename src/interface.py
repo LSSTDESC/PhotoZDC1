@@ -1,4 +1,4 @@
-"""Classes and functions to interface with data sets, our "Butler"
+"""Classes and functions to interface with data sets
 
   
 
@@ -135,9 +135,10 @@ class ReadCosmoSim(object):
                 
                 data = np.asarray(data).T
                 #print len(data)
-            
+                
+                #print "range from", ii, ii+len(data)
                 index = range(ii, ii+len(data))
-                ii = len(data)
+                ii = ii+len(data)
                 self._data = self._data.append(pd.DataFrame(data, columns=columns, index=index))
          
         f.close()
