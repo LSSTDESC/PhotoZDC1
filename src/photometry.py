@@ -32,8 +32,10 @@ class PhotCalcs(object):
     
     """
 
-    def __init__(self, sed, filterDict, FAST_INTEG = True, INTEG_PREC=1000):
+    def __init__(self, sed, filterDict, FAST_INTEG=True, INTEG_PREC=10000):
         """Initialise photometry calculation
+        
+           Not that if FAST_INTEG=True then INTEG_PREC>=10000 for LSST precision
         
            @param sed           SED object (spectral energy distribution)
            @param filterDict    dictionary of filters: keyword=filter filename without path or extension,
@@ -44,7 +46,7 @@ class PhotCalcs(object):
         self.filterDict = filterDict
         self.cache_kcorr = {}
         self.FAST_INTEG = FAST_INTEG
-        self.INTEG_PREC = INTEG_PREC
+        self.INTEG_PREC = INTEG_PREC # needed if FAST_INTEG
         
         
         #filter_list = sedFilter.orderFiltersByLamEff(self.filterDict)
