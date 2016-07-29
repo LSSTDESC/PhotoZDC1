@@ -6,10 +6,11 @@
 
 import numpy as np
 import astropy.io.fits as fits
-from astropy.table import Table
+#from astropy.table import Table
 import pandas as pd
 import operator
 import difflib
+import h5py
 
 import sedMapper
 
@@ -39,6 +40,9 @@ class ReadCosmoSim(object):
         if (ext=="fits" or ext=="fit"):
             self._filetype = "FITS"
             self._read_fits(file_to_read, nhdu)
+        if (ext=="hdf5"):
+            self._filetype = "HDF5"
+            self._read_hdf5(file_to_read)
         else:
             self._filetype = "TEXT"
             self._read_text(file_to_read, delimiter, index)
@@ -51,13 +55,29 @@ class ReadCosmoSim(object):
            @param nhdu           HDU number containing data (indexed from zero)
         """
         
-        table = Table.read(file_to_read)
-        data = table._data # will be deprecated but Table.as_array doesn't work????
-        # Fix byte order.
-        # See https://github.com/astropy/astropy/issues/1156
-        data = data.byteswap().newbyteorder()
-        self._data = pd.DataFrame.from_records(data)
-        self._col_names = self._data.columns
+        hdulist = fits.open(catalog)
+        cols = hdulist[1].columns.names
+        data = hdulist[1].data
+        
+        nrows = len(data)
+        ncols = len(data[0])
+        data_array = np.zeros((nrows, ncols))
+        
+        for i, row in enumerate(data):
+            for j in range(len(row)):
+                data_array[i,j] = row[j]
+                
+        self._data = pd.DataFrame(data_array, columns=cols)
+        self._col_names = cols
+        
+        # this fix now broken
+        #table = Table.read(file_to_read)
+        #data = table._data # will be deprecated but Table.as_array doesn't work????
+        ## Fix byte order.
+        ## See https://github.com/astropy/astropy/issues/1156
+        #data = data.byteswap().newbyteorder()
+        #self._data = pd.DataFrame.from_records(data)
+        #self._col_names = self._data.columns
         
         # old attempt
         #hdulist = fits.open(file_to_read)
@@ -81,6 +101,49 @@ class ReadCosmoSim(object):
         self._col_names = self._data.columns
 
 
+    def _read_hdf5(self, file_to_read):
+        """Read hierarchical data from HDF5 file
+        
+           @param file_to_read   full path and name of file containing simulation
+        
+        """
+    
+        # create empty dataframe
+        self._data = pd.DataFrame()
+    
+        # open hdf5 file
+        f = h5py.File(file_to_read, 'r')
+
+        # loop over tree structure
+        ii = 0
+        for zslice in f.keys():
+    
+            output = f[zslice]
+            #print "On redshift slice", zslice ,"of", len(f.keys())
+            columns = output.keys()
+    
+            # if at least one column in this slice
+            if len(columns)>=1:      
+            
+                self._col_names = columns
+                ncol = len(columns)
+                
+            
+                data = []
+                for i, col in enumerate(columns):
+                    data.append(output[col].value)
+                
+                data = np.asarray(data).T
+                #print len(data)
+            
+                index = range(ii, ii+len(data))
+                ii = len(data)
+                self._data = self._data.append(pd.DataFrame(data, columns=columns, index=index))
+         
+        f.close()
+
+    
+    
     ### Print method
     def head(self):
         print self._data.head()
@@ -418,4 +481,19 @@ def orderMagnitudeColumns(filter_order, map_filtname_to_colname):
         
     return column_filter
     
-    
+
+def add_colors_to_df(df, mag_columns):
+    """Add colors to the dataframe
+       
+       @param df             dataframe
+       @param mag_columns    column names containing magnitudes
+    """
+
+    ncolor = len(mag_columns)-1
+    for i in range(ncolor):
+        color_name = mag_columns[i] + "-" + mag_columns[i+1]
+        
+        # add color column to dust simulation
+        df[color_name] = df[mag_columns[i]] - df[mag_columns[i+1]]
+        
+        
