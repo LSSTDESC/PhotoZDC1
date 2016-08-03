@@ -4,6 +4,7 @@ import astropy.io.fits as fits
 import h5py
 import matplotlib.pyplot as plt
 import plot_color
+import scipy.interpolate as interp
 
 
 
@@ -28,6 +29,50 @@ lsst_bias_max = 0.003
 lsst_outlier_max = 0.1
 
 
+### Generic reader function
+def read_photoz_estimates(filename, objid="buzzID", **kwargs):
+    """Read photo-z estimate results from file. 
+       First line in file is list of all the column names
+       Place data into pandas dataframe indexed by objid.
+
+       @param filename    name (and relative path) of file containing data
+       @param objid       name of column containing object ID's
+      
+       kwargs are the keyword arguments to pandas.read_csv
+       
+       @warning header CANNOT be indicated with a e.g. '#' character
+       
+       @warning if file contains comments they must be indicated with keyword argument
+                e.g. comments='#'
+       
+       THERE CAN ONLY BE ONE HEADER LINE!
+       
+       filename can be a:
+       - text file (extension either .txt or .dat)
+       - csv file (extension .csv)
+       - FITS Binary Table (extension .fits or .fit)
+       - HDF5 file (extension HDF5)
+       
+    """
+    # parse file extension
+    file_ext = filename.split('.')[-1]
+    
+    # choose correct reader
+    if file_ext in ['dat', 'txt']:
+        df = read_txt(filename, objid, **kwargs)
+    elif file_ext == 'csv':
+        df = read_txt(filename, objid=objid, sep=',', **kwargs)
+    elif file_ext in ['fit','fits']:
+        df = read_fits(filename)
+    elif file_ext in 'hdf5':
+        df = read_hdf5(filename)
+    else:
+        print filename
+        raise ValueError("Error! unknown file type")
+        
+    return df
+
+
 ### Reader for text file
 def read_txt(filename, objid, **kwargs):
     """Read photo-z estimate results from text file. 
@@ -43,7 +88,6 @@ def read_txt(filename, objid, **kwargs):
     df = pd.read_table(filename, **kwargs)
     
     # set the objid column as the dataframe index
-    print df.columns
     if objid not in df.columns:
         raise ValueError("Error! " + objid + " column not found in text file")
     
@@ -92,48 +136,7 @@ def read_hdf5(filename):
     raise NotImplementedError
     
 
-### Generic reader function
-def read_photoz_estimates(filename, objid="buzzID", **kwargs):
-    """Read photo-z estimate results from file. 
-       First line in file is list of all the column names
-       Place data into pandas dataframe indexed by objid.
 
-       @param filename    name (and relative path) of file containing data
-       @param objid       name of column containing object ID's
-      
-       kwargs are the keyword arguments to pandas.read_csv
-       
-       @warning header CANNOT be indicated with a e.g. '#' character
-       
-       @warning if file contains comments they must be indicated with keyword argument
-                e.g. comments='#'
-       
-       THERE CAN ONLY BE ONE HEADER LINE!
-       
-       filename can be a:
-       - text file (extension either .txt or .dat)
-       - csv file (extension .csv)
-       - FITS Binary Table (extension .fits or .fit)
-       - HDF5 file (extension HDF5)
-       
-    """
-    # parse file extension
-    file_ext = filename.split('.')[-1]
-    
-    # choose correct reader
-    if file_ext in ['dat', 'txt']:
-        df = read_txt(filename, objid, **kwargs)
-    elif file_ext == 'csv':
-        df = read_txt(filename, objid=objid, sep=',', **kwargs)
-    elif file_ext in ['fit','fits']:
-        df = read_fits(filename)
-    elif file_ext in 'hdf5':
-        df = read_hdf5(filename)
-    else:
-        print filename
-        raise ValueError("Error! unknown file type")
-        
-    return df
     
     
 ### Dataframe manipulation
@@ -146,6 +149,9 @@ def join_dataframes(photoz_df, truth_df, join_type="left"):
     
     """
     return photoz_df.join(truth_df, how=join_type, lsuffix="_pz", rsuffix="_tr")
+    
+    
+################### POINT ESTIMATE VALIDATION #####################
     
 
 def add_ez_column(df, true_z, photo_z="z_photo", col_name="ez"):
@@ -574,6 +580,8 @@ def violin_vs_redshift(df, photo_z, true_z, ax, selection=None, zbins=[0,2,0.2],
        @param **kwargs     matplotlib.pyplot.hist keyword arguments
            
     """
+    return NotImplementedError
+    
     # unpack redshift binning
     zmin = zbins[0]
     zmax = zbins[1]
@@ -600,4 +608,75 @@ def violin_vs_redshift(df, photo_z, true_z, ax, selection=None, zbins=[0,2,0.2],
     ax.set_xlabel("")
     plt.suptitle("")
     
-    return bp
+    #return bp
+  
+################### PDF VALIDATION #####################
+  
+def get_Qtheory(cdf_df, true_z):
+    """Get Qtheory
+    
+       @param cdf_df    dataframe containing CDF's for each galaxy,
+                        indexed by the designated "objid".
+                        The column names in this dataframe are the redshift grid
+       @param true_z    Series containing the true redshifts, indexed
+                        by same "objid" in cdf_df
+    
+    """
+    
+    # convert dataframe column names to numeric redshift grid
+    zgrid = np.asarray(cdf_df.columns).astype(np.float64)
+
+    Qtheory = []
+    for index, row in cdf_df.iterrows():
+
+        cdf = row[cdf_df.columns]
+
+        # do interpolation
+        cdf = interp.InterpolatedUnivariateSpline(zgrid, cdf, k=1)
+    
+        qt = cdf(true_z.loc[index])
+        Qtheory.append(float(qt))
+
+    return Qtheory
+    
+    
+def get_Qdata(cdf_df, qtheory):
+    """Get Qdata
+    
+       @param cdf_df    dataframe containing CDF's for each galaxy,
+                        indexed by the designated "objid".
+                        The column names in this dataframe are the redshift grid
+       @param qtheory   Series containing Qtheory, indexed
+                        by same "objid" in cdf_df
+    
+    """
+    
+    Qdata = []
+    for qt in qtheory:
+    
+        ilower = qtheory[(qtheory<qt)]
+        Qdata.append(len(ilower)/float(len(qtheory)))
+    
+    return Qdata
+    
+    
+def add_Q(df, qvalues, QT=True):
+    """Add Qtheory or Qdata to dataframe
+    """
+    if (QT):
+        df["QTHEORY"] = qvalues
+    else:
+        df["QDATA"] = qvalues
+        
+        
+def add_distance(df):
+    """Add L2-norm distance from the (QT, QD) point to the 
+       perfect QT=QD line
+    """
+    df["L2NORM"] = abs(df["QTHEORY"]-df["QDATA"])*np.sin(np.pi/4.)
+    
+    
+def score(df):
+    """Total L2-norm between Q-Q curve and ideal line
+    """
+     return np.sqrt(pow(df["L2NORM"],2).sum())
