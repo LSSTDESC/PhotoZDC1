@@ -29,28 +29,25 @@ lsst_outlier_max = 0.1
 
 
 ### Reader for text file
-def read_txt(filename, sep):
-    """Read photo-z point estimate results from text file. 
-       File can be \t or ' ' separated
-       Place data into pandas dataframe indexed by objid
+def read_txt(filename, objid, **kwargs):
+    """Read photo-z estimate results from text file. 
+       Place data into pandas dataframe indexed by objid.
+       
+       @param objid   name of column containing object ID's
+      
+       kwargs are the keyword arguments to pandas.read_csv
     
     """
-    if sep=='\t':
-        delim_whitespace = False
-    else:
-        delim_whitespace = True
-    
-    # read text file
-    df = pd.read_table(filename, delim_whitespace=delim_whitespace)
 
-    if df.columns[0][0]=='#':
-        raise ValueError("Error! text file header must NOT start with #")
+    # read text file
+    df = pd.read_table(filename, **kwargs)
     
-    # set the objid column as the dataframe index    
-    if "objid" not in df.columns:
-        raise ValueError("Error! objid column not found in text file")
+    # set the objid column as the dataframe index
+    print df.columns
+    if objid not in df.columns:
+        raise ValueError("Error! " + objid + " column not found in text file")
     
-    df = df.set_index("objid")
+    df = df.set_index(objid)
     
     #print "First entries of data read in"
     #print df.head(), "\n"
@@ -96,12 +93,22 @@ def read_hdf5(filename):
     
 
 ### Generic reader function
-def read_photoz_point_estimates(filename, sep='\t'):
-    """Read photo-z point estimate results from file. 
+def read_photoz_estimates(filename, objid="buzzID", **kwargs):
+    """Read photo-z estimate results from file. 
+       First line in file is list of all the column names
        Place data into pandas dataframe indexed by objid.
 
        @param filename    name (and relative path) of file containing data
-       @param delimiter   delimiter of file (relevant if text or csv)
+       @param objid       name of column containing object ID's
+      
+       kwargs are the keyword arguments to pandas.read_csv
+       
+       @warning header CANNOT be indicated with a e.g. '#' character
+       
+       @warning if file contains comments they must be indicated with keyword argument
+                e.g. comments='#'
+       
+       THERE CAN ONLY BE ONE HEADER LINE!
        
        filename can be a:
        - text file (extension either .txt or .dat)
@@ -115,9 +122,9 @@ def read_photoz_point_estimates(filename, sep='\t'):
     
     # choose correct reader
     if file_ext in ['dat', 'txt']:
-        df = read_txt(filename, sep)
+        df = read_txt(filename, objid, **kwargs)
     elif file_ext == 'csv':
-        df = read_txt(filename, sep=',')
+        df = read_txt(filename, objid=objid, sep=',', **kwargs)
     elif file_ext in ['fit','fits']:
         df = read_fits(filename)
     elif file_ext in 'hdf5':
