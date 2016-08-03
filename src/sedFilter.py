@@ -753,7 +753,7 @@ def createFilterDict(listOfFiltersFile, pathToFile="../filter_data/"):
         
     filterDict = {}
     for line in f:
-           
+
         filtData = np.loadtxt(pathToFile + "/" + line.rstrip())
         filtName = line.rstrip().split('.')[0]
         print "Adding filter", filtName ,"to dictionary"
@@ -799,6 +799,27 @@ def getNames(filter_or_sed_dict):
     return filter_or_sed_dict.keys()
     
 
+def getWaveLenRangeOfLib(sedDict):
+    """Return wavelength range covered by SEDs in library"""
+    
+    unphys = 1e100
+    
+    minLam = unphys
+    maxLam = -unphys
+    for sedname, sed in sedDict.items():
+    
+        if minLam>sed.lamMin:
+            minLam = sed.lamMin
+            
+        if maxLam<sed.lamMax:
+            maxLam = sed.lamMax
+    
+    if minLam>maxLam or minLam==unphys or maxLam<0:
+        raise ValueError("Error! unphysical wavelength range!")
+    
+    return minLam, maxLam
+    
+
 # Retire this function, use the below 'orderFiltersByLamEff' instead
 #def getFilterList(listOfFiltersFile, pathToFile="../filter_data/"):
 #    """Read file containing list of filters to read, place the filter names into a list
@@ -828,9 +849,30 @@ def orderFiltersByLamEff(filterDict):
     return filter_order
     
 
-def writeSEDs(sedDict, outputfile, minWavelen=2999., maxWavelen=12000., nWavelen=10000):
+def writeSEDs(sedDict, outputfile, **kwargs):
     """
-    """
+    
+        kwargs can be:
+           @param lamMin       minimum wavelength in angstroms
+           @param lamMax       maximum wavelength in angstroms
+           @param nLam         number of points in wavelength grid
+           @param wavelengths  wavelength grid
+           @param z            redshift of spectrum
+           
+        """
+    
+    # Check if wavelengths are supplied as grid or min, max, num range
+    hasGrid = False
+    if 'wavelengths' in kwargs:
+        waveLen = kwargs['wavelengths']
+        hasGrid = True
+    elif ('lamMin' in kwargs and 'lamMax' in kwargs and 'nLam' in kwargs):
+        minWavelen = kwargs['lamMin']
+        maxWavelen = kwargs['lamMax']
+        nWavelen = kwargs['nLam']
+        hasGrid = False
+    else:
+        raise ValueError("ERROR! wavelength grid incorrectly specified")
 
     spectra = []    
     for ised, (sedname, spec) in enumerate(sedDict.items()):
@@ -839,7 +881,10 @@ def writeSEDs(sedDict, outputfile, minWavelen=2999., maxWavelen=12000., nWavelen
         print "On SED", ised+1 ,"of", len(sedDict), sedname
     
         # re-grid SEDs onto same wavelengths
-        waveLen, fl = spec.getSedData(lamMin=minWavelen, lamMax=maxWavelen, nLam=nWavelen)
+        if (hasGrid):
+            fl = spec.getSedData(wavelengths=waveLen)
+        else:
+            waveLen, fl = spec.getSedData(lamMin=minWavelen, lamMax=maxWavelen, nLam=nWavelen)
         
         if (ised<1):
             spectra.append(waveLen)
