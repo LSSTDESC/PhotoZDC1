@@ -271,17 +271,51 @@ class BestFitTemplateSpectrum(object):
      
         
 class NearestNeighbor(object):
+    """Find nth nearest neighbors in color space to galaxy given an SED library, 
+       weight each appropriately and make composite spectrum.
+       
+       Could be extended to work in e.g. PCA eigenvalue space
+    
+    """
 
-    def __init__(self, sed_lib_data):
+    def __init__(self, sedDict, filterDict, ipivot=2, nnn=7, nWavelen=10000, wlnorm=8000):
+    #sed_lib_data, minWavelen, maxWavelen, nWavelen, nnn=7, wlnorm=8000):
         """
-        @param sed_lib_data   each row is data for a different SED in the SED library
-                              each column is a different "feature" of the SED, could be color or eigenvalue
+            @param sedDict     Dictionary of SEDs to use  
+            @param filterDict  Filter set to define colors
+            @param ipivot      Index of filter to reference ALL colors to (if -1 just does usual)
+            @param nnn         Number of nearest neighbors to use 
+            @param nWavelen    Resolution of composite spectrum
+            @param wlnorm      Wavelength to normalise to 1 at
         """
         
-        self._sed_lib_data = sed_lib_data
+        # Calculate colors of all SEDs in library
+        self._sedDict = sedDict
+        self._sed_lib_data  = get_sed_colors(self._sedDict, filterDict, ipivot, doPrinting=False)
+        
+        self._minWavelen, self._maxWavelen = sedFilter.getWaveLenRangeOfLib(self._sedDict)
+        self._nWavelen = nWavelen
+        self._nnn = nnn
+        self._wlnorm = wlnorm
+        
+    
+    def get_composite_spectrum(self, data_vector):
+        """Main method: given a set of galaxy colors* return the composite spectrum 
+           derived from nth nearest neighbors in the SED library
+           
+           @param data_vector    array of galaxy colors (*could be extended to e.g. PCA eigenvalues)
+        
+        """
+        # first find the nearest neigbors
+        neighbors = self.find_nearest_neighbors(data_vector)
+        
+        # then turn into composite spectrum
+        waveLen, sed_comp, sed_all = self.make_composite(neighbors)
+        
+        return waveLen, sed_comp, sed_all
         
         
-    def find_nearest_neighbors(self, data_vector, nnn=7):
+    def find_nearest_neighbors(self, data_vector):
         """Return the indices and distances of the SEDs in the SED library of the nnn nearest neighbors 
         
         """
@@ -308,19 +342,61 @@ class NearestNeighbor(object):
         # weights will be 1/distance^2, make sure they sum to 1
         suminvsq = 0.
         eps = 1e-10
-        for i in range(nnn):
+        for i in range(self._nnn):
             suminvsq += 1./(distance_sq[isort[i]]+eps)
         # put result into list of tuples: first is index of neighbor SED, second is its weight
         
         neighbors = []
-        for i in range(nnn):
+        for i in range(self._nnn):
             weight = 1./(distance_sq[isort[i]]+eps)
             #print weight, suminvsq
             neighbors.append( (isort[i], weight/suminvsq, distance_sq[isort[i]]) )
         
         return neighbors
         
-
+        
+    def make_composite(self, neighbors):
+        """Using the list of SEDs sorted by ascending distance along with their weights, 
+           create composite spectrum
+        
+           @param neighbors    list of: (index of SED in library, weight of SED, distance sq away)
+                               sorted by ascending distance away
+        """
+    
+        sednames = self._sedDict.keys()
+        dWavelen = (self._maxWavelen-self._minWavelen)/(self._nWavelen-1.)
+        
+        ### get the num_nearest_neighbors SEDs
+        sed_comp = np.zeros((self._nWavelen,))
+        sed_all = np.zeros((self._nWavelen, self._nnn))
+        for i, neighbor in enumerate(neighbors):
+    
+            sedid = neighbor[0]
+            frac_sed = neighbor[1]
+    
+            # get SED
+            spec = self._sedDict[sednames[sedid]]
+            waveLen, fl = spec.getSedData(lamMin=self._minWavelen, lamMax=self._maxWavelen, 
+                                          nLam=self._nWavelen)
+        
+            # normalise so flux = 1 at wlnorm
+            inorm = np.argmin(abs(waveLen-self._wlnorm))
+            flnorm = fl[inorm]
+            fl /= flnorm
+        
+            # add to sed_comp
+            sed_comp += fl*frac_sed
+        
+            # all the seds
+            sed_all[:,i] = fl/np.sum(fl*dWavelen)
+    
+    
+        # normalise so integrates to 1
+        norm = np.sum(sed_comp*dWavelen)
+        sed_comp/=norm
+            
+        return waveLen, sed_comp, sed_all
+    
     
     
 ##### Helper functions
