@@ -17,6 +17,7 @@ import sedMapper
 # operator look up dictionary
 ops = {"==": operator.eq, "!=": operator.ne, ">": operator.gt, ">=": operator.ge, "<": operator.lt,
        "<=": operator.le}
+       
 
 
 class ReadCosmoSim(object):
@@ -40,7 +41,7 @@ class ReadCosmoSim(object):
         if (ext=="fits" or ext=="fit"):
             self._filetype = "FITS"
             self._read_fits(file_to_read, nhdu)
-        if (ext=="hdf5"):
+        elif (ext=="hdf5"):
             self._filetype = "HDF5"
             self._read_hdf5(file_to_read)
         else:
@@ -55,9 +56,9 @@ class ReadCosmoSim(object):
            @param nhdu           HDU number containing data (indexed from zero)
         """
         
-        hdulist = fits.open(catalog)
-        cols = hdulist[1].columns.names
-        data = hdulist[1].data
+        hdulist = fits.open(file_to_read)
+        cols = hdulist[nhdu].columns.names
+        data = hdulist[nhdu].data
         
         nrows = len(data)
         ncols = len(data[0])
@@ -69,6 +70,8 @@ class ReadCosmoSim(object):
                 
         self._data = pd.DataFrame(data_array, columns=cols)
         self._col_names = cols
+        
+        hdulist.close()
         
         # this fix now broken
         #table = Table.read(file_to_read)
@@ -146,8 +149,8 @@ class ReadCosmoSim(object):
     
     
     ### Print method
-    def head(self):
-        print self._data.head()
+    def head(self, n=5):
+        print self._data.head(n)
         
 
     ### Getter methods
