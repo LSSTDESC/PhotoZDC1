@@ -538,6 +538,42 @@ class ReadCosmoSim(object):
                 raise ValueError("ERROR! column name (" + column + ") not valid!")
                 
             
+def split_training(training_file, outroot, pct_valid=0.2, redshift_column="redshift"):
+    """Split FITS file with training data into two separate FITS files of
+       training data and validation data
+       
+       @param training_file     FITS file containing training data
+       @param outroot           output root of new files
+       @param pct_valid         percent of training data to be put in validation set
+       @param redshift_column   column name of FITS file containing redshifts
+    """
+    
+    # read FITS into dataframe
+    training_data = interface.ReadCosmoSim(training_file)
+    training_df = training_data._data
+    
+    # remove the redshift column from a list of the columns
+    cols = list(training_df.columns.values)
+    cols.remove(redshift_column)
+    
+    from sklearn import cross_validation
+
+    # split into training and testing
+    phot_train, phot_test, redshift_train, redshift_test = cross_validation.train_test_split(
+    training_df[cols], training_df[redshift_column], test_size=pct_valid, random_state=0)
+    
+    # rejoin the phot data and the redshift data back together
+    training_set = phot_train.join(redshift_train)
+    validation_set = phot_test.join(redshift_test)
+    
+    # write files 
+    comment = "pure training sample extracted from " + training_file
+    interface.write_df_to_fits(training_set, outroot+"_puretrain.fits", comment)
+    
+    comment = "validation sample extracted from " + training_file
+    interface.write_df_to_fits(validation_set, outroot+"_validation.fits", comment)
+    
+            
 # would like to develop this method
 # however it doesn't quite work because for some reason:
 # with "SDSS_u" difflib.get_close_matches thinks
