@@ -1,3 +1,10 @@
+"""Functions concerned with reading in photo-z catalogs 
+   in FITS format and returning the catalogs in format 
+   required for certain photo-z algorithms
+
+"""
+
+
 import interface
 
 
