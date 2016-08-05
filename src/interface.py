@@ -18,6 +18,89 @@ import sedMapper
 ops = {"==": operator.eq, "!=": operator.ne, ">": operator.gt, ">=": operator.ge, "<": operator.lt,
        "<=": operator.le}
        
+       
+def read_fits_header(file_to_read):
+    """Print some basic info from the FITS file header
+    """
+    
+    hdulist = fits.open(file_to_read)
+    
+    print "HDU list info:"
+    print hdulist.info(), "\n"
+    
+    print "Header of each HDU:"
+    for hdu in hdulist:
+        print repr(hdu.header), '\n'
+    print ""
+
+    print "Columns in 2nd HDU:"
+    cols = hdulist[1].columns
+    print cols.info(), "\n"
+    print ""
+        
+    print "Comment(s) in first HDU"
+    print hdulist[0].header['COMMENT'], "\n"
+    
+    hdulist.close()
+    
+    
+def convert_df_to_fitstable(df):
+    """Convert dataframe to a FITS binary table
+    
+       @param df  dataframe 
+    """
+    import re
+    
+    # any column ending in ID is the ID column
+    reg = ".*ID$"
+
+    fits_columns = []
+    for column in df:
+    
+        # numpy doesn't allow a dtype with a unicode column name
+        # so convert to str
+        col_name = str(df[column].name)
+        col_data = df[column].values
+    
+        # all columns double precision except for ID column
+        format_column = 'D'
+    
+        # check for ID column
+        if re.match(reg, col_name):
+            col_data.astype(np.int64, copy=False)
+            format_column = 'K'
+    
+        col = fits.Column(name=col_name, format=format_column, array=col_data)
+        fits_columns.append(col)
+
+
+    cols = fits.ColDefs(fits_columns)
+    tbhdu = fits.BinTableHDU.from_columns(cols)
+    return tbhdu
+    
+
+def add_comment_to_header(comment):
+    """Create a header and add a comment to it"""
+    
+    prihdr = fits.Header()
+    prihdr['COMMENT'] = comment
+    prihdu = fits.PrimaryHDU(header=prihdr)
+    
+    return prihdu
+
+
+def write_df_to_fits(df, outfile_name, comment=""):
+    """Write a dataframe to a FITS file
+    
+       @param df              dataframe
+       @param outfile_name    name of FITS file to create
+       @param comment         comment to add to primary header
+    """
+
+    tbhdu = convert_df_to_fitstable(df)
+    prihdu = add_comment_to_header(comment)
+    thdulist = fits.HDUList([prihdu, tbhdu])
+    thdulist.writeto(outfile_name)
 
 
 class ReadCosmoSim(object):
