@@ -41,7 +41,7 @@ def convert_fits_to_skynet(training_file, test_file, input_cols, output_cols, ou
     training_set = interface.ReadCosmoSim(training_file)
     training_df = training_set._data
     
-    test_set = interface.ReadCosmoSim(training_file)
+    test_set = interface.ReadCosmoSim(test_file)
     test_df = test_set._data
     
     # write data
