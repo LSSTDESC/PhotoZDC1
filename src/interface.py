@@ -111,13 +111,14 @@ class ReadCosmoSim(object):
     
     """
 
-    def __init__(self, file_to_read, nhdu=1, delimiter=' ', index=False):
+    def __init__(self, file_to_read, nhdu=1, delimiter=' ', index=False, **kwargs):
         """Read in data from file
         
            @param file_to_read   full path and name of file containing simulation
            @param nhdu           (FITS ONLY) HDU number containing data (indexed from zero)
            @param delimiter      (TEXT ONLY) character that delimits text file
            @param index          (TEXT ONLY) column number to use as row index (default is none)
+           @param kwargs         (TEXT ONLY) keyword arguments to pass to pd.read_csv
         """
         ext = file_to_read.split(".")[-1]
         
@@ -129,7 +130,7 @@ class ReadCosmoSim(object):
             self._read_hdf5(file_to_read)
         else:
             self._filetype = "TEXT"
-            self._read_text(file_to_read, delimiter, index)
+            self._read_text(file_to_read, delimiter, index, **kwargs)
 
 
     def _read_fits(self, file_to_read, nhdu=1):
@@ -175,14 +176,15 @@ class ReadCosmoSim(object):
         # ValueError: Big-endian buffer not supported on little-endian compiler
         
         
-    def _read_text(self, file_to_read, delimiter=' ', index=False):
+    def _read_text(self, file_to_read, delimiter=' ', index=False, **kwargs):
         """Read data and column names from a text file
 
            @param file_to_read   full path and name of file containing simulation
            @param delimiter      delimiter in text file
            @param index          column to use as row index (False=none)
+           @param kwargs         keyword arguments to pass to pd.read_csv
         """
-        self._data = pd.read_csv(file_to_read, delimiter=delimiter, index_col=index)  
+        self._data = pd.read_csv(file_to_read, delimiter=delimiter, index_col=index, **kwargs)  
         #np.genfromtxt(file_to_read, dtype='float', names=True) # this is WAY slower
         self._col_names = self._data.columns
 
@@ -549,7 +551,7 @@ def split_training(training_file, outroot, pct_valid=0.2, redshift_column="redsh
     """
     
     # read FITS into dataframe
-    training_data = interface.ReadCosmoSim(training_file)
+    training_data = ReadCosmoSim(training_file)
     training_df = training_data._data
     
     # remove the redshift column from a list of the columns
@@ -568,10 +570,10 @@ def split_training(training_file, outroot, pct_valid=0.2, redshift_column="redsh
     
     # write files 
     comment = "pure training sample extracted from " + training_file
-    interface.write_df_to_fits(training_set, outroot+"_puretrain.fits", comment)
+    write_df_to_fits(training_set, outroot+"_puretrain.fits", comment)
     
     comment = "validation sample extracted from " + training_file
-    interface.write_df_to_fits(validation_set, outroot+"_validation.fits", comment)
+    write_df_to_fits(validation_set, outroot+"_validation.fits", comment)
     
             
 # would like to develop this method
