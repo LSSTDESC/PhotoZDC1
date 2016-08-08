@@ -679,4 +679,4 @@ def add_distance(df):
 def score(df):
     """Total L2-norm between Q-Q curve and ideal line
     """
-     return np.sqrt(pow(df["L2NORM"],2).sum())
+    return np.sqrt(pow(df["L2NORM"],2).sum())
