@@ -87,10 +87,14 @@ def read_txt(filename, objid, **kwargs):
     # read text file
     df = pd.read_table(filename, **kwargs)
     
-    # set the objid column as the dataframe index
+   
     if objid not in df.columns:
         raise ValueError("Error! " + objid + " column not found in text file")
-    
+        
+    # make sure objid is an integer
+    df[objid] = df[objid].astype('int64')
+
+    # set the objid column as the dataframe index
     df = df.set_index(objid)
     
     #print "First entries of data read in"
