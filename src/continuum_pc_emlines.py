@@ -14,9 +14,20 @@ import numpy as np
 import scipy.spatial as ssp
 from scipy.spatial.distance import pdist
 from scipy import interp
-import filereading as reader
 import scipy.ndimage.filters as flt
 import time
+
+### The emission lines
+H_alpha = 6565.
+H_beta = 4863.
+S_IIa = 6718.
+S_IIb = 6733.
+H_gamma = 4342.
+O_II = 3728.5 # this is the mid-point between the doublet
+O_IIIa = 5008.
+O_IIIb = 4960.
+N_IIa = 6585.
+N_IIb = 6550.
 
 
 ### Various readers for reading in the SDSS data ###
@@ -386,7 +397,7 @@ def lwr_fun(training_inputs, training_outputs, datapoint, c=1.0):
 class EmLinePaste(object):
 
     def __init__(self, continua_pc_file, eigenV_file, mean_spec_file, 
-                       gal_sample_file, wl_grid_file, npc=5):
+                       gal_sample_file, wl_grid_file, npc=5, sigma=200.):
         """Initialise emission line paster
         
            @param continua_pc_file   file containing PC's for each training spectrum
@@ -395,6 +406,7 @@ class EmLinePaste(object):
            @param gal_sample_file    file containing measured data from training spectra
            @param wl_grid_file       file containing wavelength grid to place query spectrum onto
            @param npc                number of PC's to keep
+           @param sigma              width of emission lines (in km/s)
         """
     
         self.continua_pc = np.loadtxt(continua_pc_file)[:,:npc]
@@ -412,9 +424,13 @@ class EmLinePaste(object):
         self.ems = read_logEW(gal_sample_file)
         self.wl = np.loadtxt(wl_grid_file)
         self.npc = npc
+        self.sigma = sigma
         
         # kd-tree for quick nearest-neighbor continuum PC lookup
         self.mytree = ssp.KDTree(self.continua_pc)
+        
+        self.wl_lines = [H_alpha, H_beta, S_IIa, S_IIb, H_gamma, 
+                         O_II, O_IIIa, O_IIIb, N_IIa, N_IIb]
         
         
     def add_emission_lines(self, wl, flux, kNN=30):
@@ -433,10 +449,45 @@ class EmLinePaste(object):
         contPCs = self._get_query_spec_pcs(flux)
         
         # predict logEW's
-        logEWs = self._pred_logEW(contPCs, kNN)
+        logEWs, weights = self._pred_logEW(contPCs, kNN)
         
-        # add logEW lines to spectrum method
+        # add each line in turn
+        lineRes = 0.1  # resolution of line wl grid in angstroms
+        for i in range(logEWs.shape[1]):
         
+            # get width of line
+            wl_line = self.wl_lines[i]
+            sigmaAng = self._getLineSigma(wl_line)
+            
+            # create wavelength grid for line
+            wlgridLine = np.arange(wl_line-5.*sigmaAng, wl_line+5.*sigmaAng, lineRes)
+            
+            # line profile (un-normalised, should just integrate to 1)
+            line_prof = self._gaussian(wlgridLine, wl_line, sigmaAng)
+            
+            # continuum integrated across line
+            meanCont = self._meanContinuumInRange(wlgridLine, flux)
+            
+            # final line profile to add
+            logEW = logEWs[0,i]
+            #print intCont, logEW, pow(10., logEW), intCont*pow(10., logEW), 
+            line_prof *= (meanCont*np.exp(logEW)) #pow(10., logEW))
+            #print np.max(line_prof),
+            
+            # interpolate onto correct grid
+            wlmin = wlgridLine[0]
+            wlmax = wlgridLine[-1]
+            imin = np.argmin(abs(wlmin-self.wl))
+            imax = np.argmin(abs(wlmax-self.wl))
+            line_prof = interp(self.wl[imin:imax], wlgridLine, line_prof)
+            
+            emission_line_flux = np.zeros(self.wl.shape)
+            emission_line_flux[imin:imax] = line_prof
+            #print np.max(emission_line_flux)
+            
+            flux += emission_line_flux
+            
+        return flux
         
     def _re_grid_wl(self, wl, flux):
         """Re-grid onto same wavelength grid as training spectra
@@ -466,6 +517,11 @@ class EmLinePaste(object):
         
            @param contPCs    the 5 continuum PC's for this query spectrum
            @param kNN        number of k nearest neighbors to use in model
+           
+           Returns two arrays, one of logEW's, one of the weights
+            
+           Order returned is:
+           H_alpha, H_beta, S_IIa, S_IIb, H_gamma, O_II, O_IIIa, O_IIIb, N_IIa, N_IIb
         """
 
         # add one onto end of contPCs
@@ -508,99 +564,42 @@ class EmLinePaste(object):
         raise NotImplementedError
             
     
-
-"""
-main function for regression.
-galaxy_sample.txt: a file provided by Beck which gives the logEW for SDSS galaxies
-est_ems.txt: estimation for the emission lines
-real_ems.txt: real value for the emission lines
-test_ems.txt: Beck's estimation for the emission lines, use as a sanity check 
-estwt.txt: not important, saved weight
-"""
-
-def s():
-
-    # column indices to read in
-    cols = np.arange(59)
-     
-    # read in properties measured from SDSS spectra
-    # http://www.vo.elte.hu/papers/2015/emissionlines/data/galaxy_sample_description.txt
-    datadir = 'galaxy_sample.txt'
-    subsample = reader.read_file(datadir, cols)
-     
-    # compute the (first 50) PC's of the SDSS spectra
-    contPCA = compute_eig_vec() # size (n_spec, 50)
-    # take the first 5?
-    contPCA = contPCA[:,0:5] # size (n_spec, 5)
-
-    # array of ones size (n_spec, 6)
-    tempPCA = np.ones((contPCA.shape[0],contPCA.shape[1]+1))
-    # fill array up to last column with continumm PCs
-    tempPCA[:,0:contPCA.shape[1]] = contPCA
-    # basically just added column of 1's onto end of contPCA array
-    contPCA = tempPCA
-    
-    # column indices of the log(EW) measured from the spectra
-    inds = 19 + 4*np.arange(10)
-    # log(EW) measured from the spectra
-    ems = subsample[:,inds]
-    # log(EW) estimated from the spectra by Beck et al
-    testem = subsample[:,inds+1]
-     
-    # number of spectra?
-    nn = len(contPCA)
-     
-    # kd-tree for quick nearest-neighbor continuum PC lookup
-    mytree = ssp.KDTree(contPCA)
-     
-    i = 0  # unused variable?
-    k = 30 # number of nearest neighbors to return
-     
-    estem = np.zeros((nn,10))
-    estwt = np.zeros(nn)
-
-    # loop over each spectrum
-    for i in np.arange(nn):
-     
-        # the 5 continuum PC's for this spectrum
-        tempPCA = contPCA[i,:]
-          
-        # query kd-tree for nearest neigbors
-        # k=number of nearest neighbors to return 
-        # just store indices of nearest neighbors
-        # +1 because by construction first neighbor will be the query point
-        _,tempind = mytree.query(tempPCA, k+1)
-          
-        # continuum PC's of 30 nearest neighbors: TRAINING INPUTS
-        nb_contPCA = contPCA[tempind[1:k+1],:]
-          
-        # logEW's of 30 nearest neighbors: TRAINING OUTPUTS
-        nb_ems = ems[tempind[1:k+1],:]
-          
-        # perform local linear regression
-        estem[i],estwt[i] = lwr_fun(nb_contPCA, nb_ems, tempPCA, c=0.1)
-          
-        #estem[i] = rhks_predict(nb_contPCA, nb_ems, tempPCA, l=0.1)
-          
-        if(i%1000==0):
-            print "finishing ",100.0*float(i)/nn,"%"
-     
-    # save estimated logEW's
-    np.savetxt('est_ems.txt',estem)
-     
-    # save measured logEW's
-    np.savetxt('real_ems.txt',ems)
-     
-    # save Beck et al logEW estimations
-    np.savetxt('test_ems.txt',testem)
-    print np.mean(estwt)
+    def _gaussian(self, lam, centroid, sigmaAng):
+        """Return value of Gaussian
+        
+           @param lam         query wavelength(s)
+           @param centroid    wavelength of centroid/mean of Gaussian
+           @param sigmaAng    width of line in Angstroms
+        """
+        
+        sigsq = sigmaAng*sigmaAng
+        norm_gauss = 1./np.sqrt(2.*np.pi*sigsq)
+        return norm_gauss*np.exp(-0.5*(lam-centroid)*(lam-centroid)/sigsq)
 
 
+    def _getLineSigma(self, wl_line):
+        """Convert the width of the line in km/s to width in wavelength (Ang)
+        
+           @param wl_line   wavelength of emission line (Ang)
+        """
 
-
-
-
-
-
+        return wl_line*self.sigma/3e5
+        
+        
+    def _meanContinuumInRange(self, wl_range, flux):
+        """Get the mean continuum value within a wavelength range
+        
+           @param wl_range   wavelength range to integrate across
+           @param flux       flux values on the (proper) wavelength grid
+        """
+        wlmin = wl_range[0]
+        wlmax = wl_range[-1]
+        
+        imin = np.argmin(abs(wlmin-self.wl))
+        imax = np.argmin(abs(wlmax-self.wl))
+        #print self.wl[0], self.wl[-1], wlmin, wlmax, imin,imax, self.wl[1]-self.wl[0]
+        
+        return np.mean(flux[imin:imax])
+        
 
 
