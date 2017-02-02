@@ -615,7 +615,51 @@ def violin_vs_redshift(df, photo_z, true_z, ax, selection=None, zbins=[0,2,0.2],
     #return bp
   
 ################### PDF VALIDATION #####################
-  
+    
+def new_get_Qtheory(pdf_df, true_z):
+    """Get Qtheory
+    
+       @param cdf_df    dataframe containing PDF's for each galaxy,
+                        indexed by the designated "objid".
+                        The column names in this dataframe are the redshift grid
+       @param true_z    Series containing the true redshifts, indexed
+                        by same "objid" in cdf_df
+    
+    """
+    
+    # convert dataframe column names to numeric redshift grid
+    realzgrid = np.asarray(pdf_df.columns).astype(np.float64)
+
+    #the cumsum gives the pdf sum at the *right edge* of the bin,
+    #we want the value in the middle, so we'll have to subtract half the 
+    #bin width off of the original grid to get the cdf grid
+    gridsp = realzgrid[1] - realzgrid[0]
+    offset = 0.5*gridsp 
+
+    offsetzgrid = realzgrid + offset
+
+    Qtheory = []
+    #for index, col in pdf_df.iteritems():
+    for index, row in pdf_df.iterrows():
+
+#        pdf = col[pdf_df.rows]
+        pdf = row[pdf_df.columns]
+
+        #make CDF with cumsum
+        cdf = np.cumsum(pdf) 
+        normcdf = cdf/cdf[-1] #normalize
+        
+        cdfspl = interp.InterpolatedUnivariateSpline(offsetzgrid,normcdf, k=1)
+        qt = cdfspl(true_z.loc[index])
+    
+
+#        qt = cdf(true_z.loc[index])
+        Qtheory.append(float(qt))
+
+    return Qtheory
+
+
+
 def get_Qtheory(cdf_df, true_z):
     """Get Qtheory
     
@@ -658,7 +702,7 @@ def get_Qdata(cdf_df, qtheory):
     Qdata = []
     for qt in qtheory:
     
-        ilower = qtheory[(qtheory<qt)]
+        ilower = qtheory[(qtheory<=qt)]
         Qdata.append(len(ilower)/float(len(qtheory)))
     
     return Qdata
