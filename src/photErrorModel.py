@@ -334,9 +334,10 @@ class LSSTErrorModel(BaseErrorModel, PhotCalcs):
         """
         sigmaRandSqSingleExp = (0.04 - gamma)*x + gamma*x*x
         sigmaRand = math.sqrt(sigmaRandSqSingleExp/nStackedObs) # actually = N/S
-
-        # following is the full expression not included in the Science Book:
-        sigmaRand = 2.5*math.log10(1. + sigmaRand)  # ~= 1.0857*N/S (stops being good approx after N/S>2
+        #December 11, 2018: Comment out this line to see if it makes the errors
+        #match up better with the DMStack outputs!              
+        ## following is the full expression not included in the Science Book:
+        #sigmaRand = 2.5*math.log10(1. + sigmaRand)  # ~= 1.0857*N/S (stops being good approx after N/S>2
 
         # The Science Book eqn is only valid for high signal to noise objects which is based upon the
         # approximation that sigmaRand ~= N/S
