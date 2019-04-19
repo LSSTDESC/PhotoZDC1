@@ -86,7 +86,7 @@ class FractionalErrorModel(BaseErrorModel, PhotCalcs):
             self.minFlux = pars["minFlux"]
             
         
-    def getObs(self, mag):
+    def getObs(self, mag, *args, **kwargs):
         # this should probs be a **args thing? YES
         
         filtObs = kwargs.get('filtObs', None)
@@ -269,7 +269,7 @@ class LSSTErrorModel(BaseErrorModel, PhotCalcs):
             self.minFlux = pars["minFlux"]
         
         
-    def getObs(self, mag, filtObs):
+    def getObs(self, mag, filtObs, *args, **kwargs):
         # this should probs be a **args thing?
 
         # size = kwargs.get('size', None)
