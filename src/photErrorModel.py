@@ -86,12 +86,19 @@ class FractionalErrorModel(BaseErrorModel, PhotCalcs):
             self.minFlux = pars["minFlux"]
             
         
-    def getObs(self, mag, filtObs=None, size=None, sed=None):
-        # this should probs be a **args thing?
+    def getObs(self, mag):
+        # this should probs be a **args thing? YES
+        
+        filtObs = kwargs.get('filtObs', None)
+        # size = kwargs.get('size', None)
+        # sed = kwargs.get('sed', None)        
+        randseed = kwargs.get('randseed', None)
         
         if (mag==float('inf')):
             raise ValueError("ERROR! magnitude is infinity, cannot calculate errors")
         
+        if randseed: random.seed(randseed)
+          
         # convert mag to flux
         flux = self.convertMagToFlux(mag)
         
@@ -262,12 +269,18 @@ class LSSTErrorModel(BaseErrorModel, PhotCalcs):
             self.minFlux = pars["minFlux"]
         
         
-    def getObs(self, mag, filtObs, size=None, sed=None):
+    def getObs(self, mag, filtObs):
         # this should probs be a **args thing?
+
+        # size = kwargs.get('size', None)
+        # sed = kwargs.get('sed', None)        
+        randseed = kwargs.get('randseed', None)
         
         if (mag==float('inf')):
             raise ValueError("ERROR! magnitude is infinity, cannot calculate errors")
-        
+
+        if randseed: random.seed(randseed)
+
         # flux and error on flux
         flux, errorFlux = self.getFluxAndError(mag, filtObs)
         
