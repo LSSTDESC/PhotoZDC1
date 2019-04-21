@@ -87,7 +87,7 @@ class FractionalErrorModel(BaseErrorModel, PhotCalcs):
             self.minFlux = pars["minFlux"]
             
         
-    def getObs(self, mag, filtObs):
+    def getObs(self, mag):
         # this should probs be a **args thing?
                 
         if (mag==float('inf')):
