@@ -38,8 +38,9 @@ class BaseErrorModel(object):
         if (not isinstance(pars, dict)):
             raise TypeError("Error parameters passed to photometric error model not in dictionary structure")  
         self.setModelPars(pars)
-    
-    
+        random.seed(pars['randSeed'])
+
+        
     @abc.abstractmethod
     def __repr__(self):
         """Set what is printed at the REPL """
@@ -86,19 +87,12 @@ class FractionalErrorModel(BaseErrorModel, PhotCalcs):
             self.minFlux = pars["minFlux"]
             
         
-    def getObs(self, mag, *args, **kwargs):
-        # this should probs be a **args thing? YES
-        
-        filtObs = kwargs.get('filtObs', None)
-        # size = kwargs.get('size', None)
-        # sed = kwargs.get('sed', None)        
-        randseed = kwargs.get('randseed', None)
-        
+    def getObs(self, mag, filtObs):
+        # this should probs be a **args thing?
+                
         if (mag==float('inf')):
             raise ValueError("ERROR! magnitude is infinity, cannot calculate errors")
-        
-        if randseed: random.seed(randseed)
-          
+                  
         # convert mag to flux
         flux = self.convertMagToFlux(mag)
         
@@ -111,7 +105,7 @@ class FractionalErrorModel(BaseErrorModel, PhotCalcs):
             fluxObs = self.minFlux
         
         # convert flux and error back to mags
-        dFluxOverFlux = errorFlux/flux
+        dFluxOverFlux = errorFlux/fluxObs # flux -> fluxObs to decorrelate the true magnitudes and estimated errors
         obsmag, errorMag = self.convertFluxAndErrorToMags(fluxObs, dFluxOverFlux)
         
         return obsmag, errorMag
@@ -269,17 +263,11 @@ class LSSTErrorModel(BaseErrorModel, PhotCalcs):
             self.minFlux = pars["minFlux"]
         
         
-    def getObs(self, mag, filtObs, *args, **kwargs):
+    def getObs(self, mag, filtObs):
         # this should probs be a **args thing?
-
-        # size = kwargs.get('size', None)
-        # sed = kwargs.get('sed', None)        
-        randseed = kwargs.get('randseed', None)
         
         if (mag==float('inf')):
             raise ValueError("ERROR! magnitude is infinity, cannot calculate errors")
-
-        if randseed: random.seed(randseed)
 
         # flux and error on flux
         flux, errorFlux = self.getFluxAndError(mag, filtObs)
@@ -292,9 +280,9 @@ class LSSTErrorModel(BaseErrorModel, PhotCalcs):
         if (fluxObs<self.minFlux):
             fluxObs = self.minFlux
         
-        # convert flux and error back to mags
-        dFluxOverFlux = errorFlux/flux
-        obsmag, errorMag = self.convertFluxAndErrorToMags(fluxObs, dFluxOverFlux)
+        # convert flux and error back to mags and decorrelate mag and errorMag
+        obsmag = self.convertFluxToMag(fluxObs)
+        errorMag = self.getMagError(obsmag, filtObs)
         
         return obsmag, errorMag
         
