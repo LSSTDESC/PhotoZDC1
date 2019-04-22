@@ -38,7 +38,7 @@ class BaseErrorModel(object):
         if (not isinstance(pars, dict)):
             raise TypeError("Error parameters passed to photometric error model not in dictionary structure")  
         self.setModelPars(pars)
-        random.seed(pars['randSeed'])
+        #random.seed(pars['randSeed'])
 
         
     @abc.abstractmethod
@@ -74,7 +74,11 @@ class FractionalErrorModel(BaseErrorModel, PhotCalcs):
     def __str__(self):
         return 'FractionalErrorModel with f = ' + str(self.fracError)
         
-        
+    def setRandomSeed(self,newseed):
+        self.randSeed = newseed
+        print ("updated random seed to new value {}".format(newseed))
+        random.seed(newseed)
+                
     def setModelPars(self, pars):
         if "fracError" not in pars:
             self.fracError = 0.1
@@ -85,7 +89,10 @@ class FractionalErrorModel(BaseErrorModel, PhotCalcs):
             self.minFlux = 2.5e-40 # equivalent to mag=99
         else: 
             self.minFlux = pars["minFlux"]
-            
+         
+        if "randSeed" in pars:  
+            self.randSeed = pars['randSeed']
+            random.seed(pars['randSeed']) 
         
     def getObs(self, mag):
         # this should probs be a **args thing?
@@ -114,6 +121,10 @@ class FractionalErrorModel(BaseErrorModel, PhotCalcs):
 class LSSTErrorModel(BaseErrorModel, PhotCalcs):
     """LSST error model, median seeing conditions """
    
+    def setRandomSeed(self,newseed):
+        self.randSeed = newseed
+        print ("updated random seed to new value {}".format(newseed))
+        random.seed(newseed)
         
     def __repr__(self):
         printMsg = '\n LSSTErrorModel parameters:\n'
@@ -154,6 +165,11 @@ class LSSTErrorModel(BaseErrorModel, PhotCalcs):
     def setModelPars(self, pars):
         """Set all parameters by default to median observation values (table 3.2 in Science Book) """
         
+        if "randSeed" in pars:
+            random.seed(pars['randSeed'])
+            self.randSeed = pars['randSeed']
+            #print ("set random seed to %d"%pars['randSeed'])
+
         # exposure time
         if "tvis" not in pars:
             self.tvis = 30.  
