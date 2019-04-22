@@ -38,8 +38,9 @@ class BaseErrorModel(object):
         if (not isinstance(pars, dict)):
             raise TypeError("Error parameters passed to photometric error model not in dictionary structure")  
         self.setModelPars(pars)
-    
-    
+        #random.seed(pars['randSeed'])
+
+        
     @abc.abstractmethod
     def __repr__(self):
         """Set what is printed at the REPL """
@@ -73,7 +74,11 @@ class FractionalErrorModel(BaseErrorModel, PhotCalcs):
     def __str__(self):
         return 'FractionalErrorModel with f = ' + str(self.fracError)
         
-        
+    def setRandomSeed(self,newseed):
+        self.randSeed = newseed
+        print ("updated random seed to new value {}".format(newseed))
+        random.seed(newseed)
+                
     def setModelPars(self, pars):
         if "fracError" not in pars:
             self.fracError = 0.1
@@ -84,14 +89,17 @@ class FractionalErrorModel(BaseErrorModel, PhotCalcs):
             self.minFlux = 2.5e-40 # equivalent to mag=99
         else: 
             self.minFlux = pars["minFlux"]
-            
+         
+        if "randSeed" in pars:  
+            self.randSeed = pars['randSeed']
+            random.seed(pars['randSeed']) 
         
-    def getObs(self, mag, filtObs=None, size=None, sed=None):
+    def getObs(self, mag):
         # this should probs be a **args thing?
-        
+                
         if (mag==float('inf')):
             raise ValueError("ERROR! magnitude is infinity, cannot calculate errors")
-        
+                  
         # convert mag to flux
         flux = self.convertMagToFlux(mag)
         
@@ -104,7 +112,7 @@ class FractionalErrorModel(BaseErrorModel, PhotCalcs):
             fluxObs = self.minFlux
         
         # convert flux and error back to mags
-        dFluxOverFlux = errorFlux/flux
+        dFluxOverFlux = errorFlux/fluxObs # flux -> fluxObs to decorrelate the true magnitudes and estimated errors
         obsmag, errorMag = self.convertFluxAndErrorToMags(fluxObs, dFluxOverFlux)
         
         return obsmag, errorMag
@@ -113,6 +121,10 @@ class FractionalErrorModel(BaseErrorModel, PhotCalcs):
 class LSSTErrorModel(BaseErrorModel, PhotCalcs):
     """LSST error model, median seeing conditions """
    
+    def setRandomSeed(self,newseed):
+        self.randSeed = newseed
+        print ("updated random seed to new value {}".format(newseed))
+        random.seed(newseed)
         
     def __repr__(self):
         printMsg = '\n LSSTErrorModel parameters:\n'
@@ -153,6 +165,11 @@ class LSSTErrorModel(BaseErrorModel, PhotCalcs):
     def setModelPars(self, pars):
         """Set all parameters by default to median observation values (table 3.2 in Science Book) """
         
+        if "randSeed" in pars:
+            random.seed(pars['randSeed'])
+            self.randSeed = pars['randSeed']
+            #print ("set random seed to %d"%pars['randSeed'])
+
         # exposure time
         if "tvis" not in pars:
             self.tvis = 30.  
@@ -262,12 +279,12 @@ class LSSTErrorModel(BaseErrorModel, PhotCalcs):
             self.minFlux = pars["minFlux"]
         
         
-    def getObs(self, mag, filtObs, size=None, sed=None):
+    def getObs(self, mag, filtObs):
         # this should probs be a **args thing?
         
         if (mag==float('inf')):
             raise ValueError("ERROR! magnitude is infinity, cannot calculate errors")
-        
+
         # flux and error on flux
         flux, errorFlux = self.getFluxAndError(mag, filtObs)
         
@@ -279,9 +296,9 @@ class LSSTErrorModel(BaseErrorModel, PhotCalcs):
         if (fluxObs<self.minFlux):
             fluxObs = self.minFlux
         
-        # convert flux and error back to mags
-        dFluxOverFlux = errorFlux/flux
-        obsmag, errorMag = self.convertFluxAndErrorToMags(fluxObs, dFluxOverFlux)
+        # convert flux and error back to mags and decorrelate mag and errorMag
+        obsmag = self.convertFluxToMag(fluxObs)
+        errorMag = self.getMagError(obsmag, filtObs)
         
         return obsmag, errorMag
         
